@@ -10,14 +10,7 @@ build/
 *.spec
 
 # 데이터 파일 (용량 큼 — 별도 배포)
-data/*.img
-data/*.shp
-data/*.dbf
-data/*.shx
-data/*.prj
-data/*.xml
-data/*.qmd
-data/*.cpg
+/data/
 
 # 캐시
 cache/
