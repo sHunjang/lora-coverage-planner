@@ -254,16 +254,30 @@ class NodeListWindow(QDialog):
         count, seed = dlg.get_params()
 
         # 부모(MainWindow)에서 spatial 가져오기
-        spatial = getattr(self.parent(), 'spatial', None)
+        spatial = None
+        p = self.parent()
+        while p is not None:
+            if hasattr(p, 'spatial'):
+                spatial = p.spatial
+                break
+            p = p.parent() if hasattr(p, 'parent') else None
+        
         if spatial is None:
             QMessageBox.warning(self, "오류", "공간 데이터가 로드되지 않았습니다.")
             return
 
         try:
             from shapely.geometry import MultiPoint
-            np.random.seed(seed)
-            b    = spatial.bounds  # (lon_min, lat_min, lon_max, lat_max)
+            b = list(spatial.bounds)
+            b[0] = float(b[0])
+            b[1] = float(b[1])
+            b[2] = float(b[2])
+            b[3] = float(b[3])
+            
+            # print(f"[DEBUG] bounds: {b}")
             poly = spatial.polygon_4326
+            
+            np.random.seed(seed)
             lon_list, lat_list = [], []
 
             self.status_msg("랜덤 배치 중...")
