@@ -267,7 +267,6 @@ class NodeListWindow(QDialog):
             return
 
         try:
-            from shapely.geometry import MultiPoint
             b = list(spatial.bounds)
             b[0] = float(b[0])
             b[1] = float(b[1])
@@ -285,8 +284,17 @@ class NodeListWindow(QDialog):
                 batch = max(count * 3, 200)
                 lons  = b[0] + (b[2] - b[0]) * np.random.rand(batch)
                 lats  = b[1] + (b[3] - b[1]) * np.random.rand(batch)
-                pts   = MultiPoint(list(zip(lons, lats)))
-                mask  = np.array([poly.contains(pt) for pt in pts.geoms])
+                try:
+                    # shapely 2.x 벡터화 방식
+                    import shapely
+                    from shapely import points as shp_points
+                    geoms = shp_points(np.stack([lons, lats], axis=1))
+                    mask  = shapely.contains(poly, geoms)
+                except Exception:
+                    # fallback: 점 단위 contains (shapely 1.x 또는 오류 시)
+                    from shapely.geometry import Point
+                    mask = np.array([poly.contains(Point(lo, la))
+                                     for lo, la in zip(lons, lats)])
                 lon_list.extend(lons[mask].tolist())
                 lat_list.extend(lats[mask].tolist())
 

@@ -79,7 +79,11 @@ class SpatialData:
 
         # ── SHP 로드 ─────────────────────────────────────────
         _log("SHP 로드 중...")
-        self.gdf_3857     = gpd.read_file(self.shp_path)
+        # pyogrio를 우선 엔진으로 사용 (PyInstaller 번들 환경 호환성)
+        try:
+            self.gdf_3857 = gpd.read_file(self.shp_path, engine='pyogrio')
+        except Exception:
+            self.gdf_3857 = gpd.read_file(self.shp_path)
         self.polygon_3857 = self.gdf_3857.geometry.iloc[0]
         self.gdf_4326     = self.gdf_3857.to_crs(epsg=4326)
         self.polygon_4326 = self.gdf_4326.geometry.iloc[0]
