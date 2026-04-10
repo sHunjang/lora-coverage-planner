@@ -796,10 +796,20 @@ class GWOptimizer:
             if covering:
                 prob += pulp.lpSum(covering) >= 1
 
-        # 풀기
-        solver = pulp.PULP_CBC_CMD(
-            timeLimit=time_limit, msg=0)
+        # PyInstaller 번들 환경: CBC 실행파일 경로 직접 지정
+        import sys as _sys, os as _os
+        if getattr(_sys, 'frozen', False):
+            _cbc = _os.path.join(
+                _sys._MEIPASS, 'pulp', 'solverdir', 'cbc', 'win', 'i64', 'cbc.exe')
+            if _os.path.isfile(_cbc):
+                solver = pulp.COIN_CMD(path=_cbc, timeLimit=time_limit, msg=0)
+            else:
+                _log(f"  [ILP] CBC 없음 → GA 사용")
+                return None
+        else:
+            solver = pulp.PULP_CBC_CMD(timeLimit=time_limit, msg=0)
         status = prob.solve(solver)
+
 
         if pulp.LpStatus[status] in ('Optimal', 'Not Solved'):
             selected = [candidates[i]

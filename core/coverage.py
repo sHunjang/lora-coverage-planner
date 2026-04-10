@@ -113,6 +113,7 @@ class CoverageEngine:
         from PIL import Image
         from pyproj import Transformer
         from scipy.ndimage import gaussian_filter, label as nd_label
+        from core.propagation import SongsModel, DeygoutDiff
 
         b = self.spatial.bounds
         lmin, latmin, lmax, latmax = b
@@ -121,33 +122,83 @@ class CoverageEngine:
         lon2d, lat2d = np.meshgrid(lons, lats)
         fl = lon2d.ravel(); fa = lat2d.ravel()
 
-        # 경계 마스크
+        # 경계 마스크 (shapely 2.x 벡터화 우선)
         try:
-            from shapely.vectorized import contains as sc
-            mask = sc(self.spatial.polygon_4326, fl, fa)
+            import shapely
+            from shapely import contains as _sc, points as _sp
+            mask = _sc(self.spatial.polygon_4326, _sp(np.stack([fl, fa], axis=1)))
         except Exception:
-            from shapely.geometry import Point
-            mask = np.array([self.spatial.polygon_4326.contains(
-                Point(lo, la)) for lo, la in zip(fl, fa)])
+            try:
+                from shapely.vectorized import contains as sc
+                mask = sc(self.spatial.polygon_4326, fl, fa)
+            except Exception:
+                from shapely.geometry import Point
+                mask = np.array([self.spatial.polygon_4326.contains(
+                    Point(lo, la)) for lo, la in zip(fl, fa)])
 
         tr = Transformer.from_crs('EPSG:4326', 'EPSG:3857', always_xy=True)
         px, py = tr.transform(fl, fa)
 
-        # GW 좌표도 동일한 Transformer 사용
         gx, gy = tr.transform(gw.lon, gw.lat)
         gx, gy = float(gx), float(gy)
 
-        model = self._model(gw.hb_m, 1.5)
-        idx   = np.where(mask)[0]
-        pf    = np.full(len(px), float(min_rx) - 50.0)
+        idx = np.where(mask)[0]
+        pf  = np.full(len(px), float(min_rx) - 50.0)
 
-        def _c(i):
-            pl = model.path_loss(gx, gy, float(px[i]), float(py[i]))
-            return i, float(gw.pt_dbm + gw.gt_dbi - gw.lt_db - pl)
+        if len(idx) == 0:
+            pg = pf.reshape(lon2d.shape)
+            boundary_mask = mask.reshape(lon2d.shape)
+            pg_masked = np.where(boundary_mask, pg, np.nan)
+        else:
+            # ── 벡터화 경로손실 계산 ─────────────────────────
+            px_m = px[idx].astype(np.float64)
+            py_m = py[idx].astype(np.float64)
 
-        with ThreadPoolExecutor(max_workers=8) as pool:
-            for i, pr in pool.map(_c, idx):
-                pf[i] = pr
+            # 1) 거리 벡터화 (Song's Model)
+            dx = px_m - gx
+            dy = py_m - gy
+            d_m  = np.maximum(np.hypot(dx, dy), 1.0)
+            d_km = d_m / 1000.0
+
+            songs = SongsModel(fc=self.fc, hb=float(gw.hb_m),
+                               hm=1.5, env=self.env)
+            # bpl 벡터화
+            pl_songs = (39.25
+                        + 35.15 * np.log10(self.fc)
+                        - 19.21 * np.log10(gw.hb_m)
+                        + (42.5 - 5.2 * np.log10(gw.hb_m)) * np.log10(d_km)
+                        - songs.ahm)
+
+            # 2) Deygout 회절손실 — 거리 기준 샘플링 수 조절
+            #    히트맵용으로 n_samples=30으로 축소 (정확도 vs 속도 트레이드오프)
+            N_DIFF = min(30, self.n_samples)
+            deygout = DeygoutDiff(fc=self.fc, max_order=1)  # order=1로 단순화
+
+            sp = self.spatial
+            dem   = sp.dem
+            ox, oy, res = sp.ox, sp.oy, sp.res
+            rows_, cols_ = sp.dem_rows, sp.dem_cols
+            h_tx, h_rx  = float(gw.hb_m), 1.5
+
+            l_diff = np.zeros(len(idx), dtype=np.float64)
+
+            # 배치 처리: 포인트별로 DEM 단면 샘플링 후 Deygout
+            for k in range(len(idx)):
+                x2, y2 = px_m[k], py_m[k]
+                xs = np.linspace(gx, x2, N_DIFF)
+                ys = np.linspace(gy, y2, N_DIFF)
+                cs = np.clip(((xs - ox) / res).astype(int), 0, cols_ - 1)
+                rs = np.clip(((oy - ys) / res).astype(int), 0, rows_ - 1)
+                elevs = dem[rs, cs]
+                elevs = np.where(np.isnan(elevs), 50.0, elevs)
+                dists = np.linspace(0, d_m[k], N_DIFF)
+                l_diff[k] = deygout.diffraction_loss(dists, elevs, h_tx, h_rx)
+
+            pl_total = pl_songs + l_diff
+            eirp     = float(gw.pt_dbm + gw.gt_dbi - gw.lt_db)
+            pr_vals  = eirp - pl_total  # Gr=0, Lr=0 (히트맵용 단순화)
+
+            pf[idx] = pr_vals
 
         pg = pf.reshape(lon2d.shape)
         boundary_mask = mask.reshape(lon2d.shape)

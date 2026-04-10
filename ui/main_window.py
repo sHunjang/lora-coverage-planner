@@ -69,6 +69,7 @@ class HeatmapWorker(QObject):
         self.env, self.fc = env, fc
 
     def run(self):
+        import traceback, sys
         try:
             import numpy as np
             import matplotlib.pyplot as plt
@@ -96,7 +97,14 @@ class HeatmapWorker(QObject):
 
             for gw in self.gws:
                 self.sig_log.emit(f"{gw.callsign} 히트맵 계산 중...")
-                hm = eng.heatmap(gw, min_rx, cb=self.sig_log.emit)
+                try:
+                    step = self.settings.get('heatmap_step', 0.0015)
+                    hm = eng.heatmap(gw, min_rx, step=step, cb=self.sig_log.emit)
+                except Exception as _e:
+                    import traceback
+                    self.sig_log.emit(f"[오류] {gw.callsign} 히트맵 실패: {_e}")
+                    print(f"[HEATMAP ERROR] {gw.callsign}:\n{traceback.format_exc()}")
+                    continue
 
                 ps = hm.get('ps')
                 cm = hm.get('cm')
@@ -188,8 +196,10 @@ class HeatmapWorker(QObject):
 
             self.sig_done.emit(hms)
         except Exception:
-            import traceback
-            self.sig_err.emit(traceback.format_exc())
+            tb = traceback.format_exc()
+            print(f"[HEATMAP FATAL ERROR]\n{tb}", flush=True)
+            sys.stdout.flush()
+            self.sig_err.emit(tb)
 
 
 class MainWindow(QMainWindow):
@@ -306,13 +316,16 @@ class MainWindow(QMainWindow):
             f"커버리지 분석 중: GW {len(gws)}개 × Node {len(nodes)}개...")
 
         w = CoverageWorker(self.spatial, gws, nodes)
-        t = QThread()
+        t = QThread(self)          # parent=self → 소멸 방지
         w.moveToThread(t)
         t.started.connect(w.run)
         w.sig_done.connect(self._on_coverage_done)
-        w.sig_err.connect(lambda m: print(f"[COV ERR] {m}"))
-        self._cov_worker = w
-        self._cov_thread = t
+        w.sig_done.connect(t.quit)
+        w.sig_err.connect(t.quit)
+        w.sig_err.connect(lambda m: print(f"[COV ERR] {m}", flush=True))
+        w.sig_err.connect(self._on_error)
+        self._cov_worker = w      # strong reference
+        self._cov_thread = t      # strong reference
         t.start()
 
     def _on_coverage_done(self, result):
@@ -454,17 +467,26 @@ class MainWindow(QMainWindow):
     # ── 히트맵 ──────────────────────────────────────────────
 
     def _start_worker(self, worker):
+        # 이전 스레드 정리
         if self._thread and self._thread.isRunning():
             self._thread.quit()
-            self._thread.wait(2000)
-        t = QThread()
-        self._thread = t
+            self._thread.wait(3000)
+
+        t = QThread(self)          # parent=self → MainWindow가 살아있는 한 t도 유지
+        self._thread = t           # strong reference
+        self._worker = worker      # strong reference
+
         worker.moveToThread(t)
         t.started.connect(worker.run)
+
+        # 완료/오류 시 스레드 종료만 (deleteLater 제거 → 소멸 타이밍 문제 방지)
+        worker.sig_done.connect(t.quit)
+        worker.sig_err.connect(t.quit)
+
         worker.sig_log.connect(lambda msg: self.status.showMessage(msg))
         worker.sig_err.connect(self._on_error)
-        worker.sig_err.connect(lambda m: print(f"[ERROR] {m}"))
-        self._worker = worker
+        worker.sig_err.connect(lambda m: print(f"[ERROR] {m}", flush=True))
+
         t.start()
 
     def _run_heatmap(self, gws, settings):
@@ -575,6 +597,17 @@ class MainWindow(QMainWindow):
 
 
     # ── 공통 ────────────────────────────────────────────────
+
+    def closeEvent(self, event):
+        """창 닫힐 때 실행 중인 스레드 정리."""
+        for t in [self._thread, self._cov_thread]:
+            if t and t.isRunning():
+                t.quit()
+                t.wait(3000)
+                if t.isRunning():
+                    t.terminate()
+                    t.wait(1000)
+        event.accept()
 
     def _on_error(self, msg):
         print(f"[오류] {msg}")
