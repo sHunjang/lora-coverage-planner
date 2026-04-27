@@ -1,569 +1,618 @@
-# core/link_matrix.py
-"""
-Station 간 경로 손실 행렬 계산 모듈
-────────────────────────────────────────────────────────────
-[역할]
-  N개 station 간 N×N 경로 손실 행렬을 계산하고 CSV로 저장.
-
-[행렬 구조]
-       ST1    ST2    ST3   ...  STN
-  ST1 [  0   PL12   PL13  ...  PL1N ]
-  ST2 [ PL12   0    PL23  ...  PL2N ]
-  ST3 [ PL13  PL23    0   ...  PL3N ]
-  ...
-  STN [ PL1N  PL2N  PL3N  ...    0  ]
-
-  - 대각선 : 0 (자기 자신)
-  - 링크 불가 : 0 (경로손실 > pl_limit)
-  - 나머지 : Song's Model + Deygout 계산값 (dB)
-
-[대칭성 활용]
-  PL[i][j] == PL[j][i] 이므로
-  실제 계산 횟수 = N×(N-1)/2 (상삼각 행렬만 계산 후 복사)
-
-[PL_limit 자동 계산]
-  MATLAB 코드와 동일한 방식:
-    Margin    = 53.383*P_edge^3 - 80.075*P_edge^2 + 57.512*P_edge - 15.41
-    PL_limit  = Pt_max - (sens_SF12 + Margin)
-
-[성능]
-  ThreadPoolExecutor로 행 단위 병렬 계산
-  진행률 콜백으로 실시간 진행 상황 전달
-────────────────────────────────────────────────────────────
-"""
+# ui/main_window.py
 from __future__ import annotations
+from PyQt5.QtWidgets import (
+    QMainWindow, QWidget, QStatusBar, QLabel,
+    QToolBar, QAction, QApplication, QSizePolicy,
+)
+from PyQt5.QtCore import Qt, QObject, pyqtSignal, QThread, QSize
+from PyQt5.QtGui import QCursor
+from ui.map_widget       import MapWidget
+from ui.gw_list_window   import GWListWindow
+from ui.node_list_window import NodeListWindow
+from core.coverage       import CoverageEngine, GWEntry
 
-import numpy as np
-import pandas as pd
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, field
-from typing import Callable
+DARK  = "#181b22"
+PANEL = "#1e2130"
+TEXT  = "#e0e4ef"
+MUTED = "#7a8099"
 
-from .propagation import PathLossModel
-
-
-# ── SF별 수신 감도 (dBm) ─────────────────────────────────────
-# SF7 ~ SF12 순서
-SENS_DBM = np.array([-123.0, -126.0, -129.0, -132.0, -134.5, -137.0])
-
-
-# ── ProcessPoolExecutor 워커 함수 (모듈 최상위 필수) ──────────
-# Windows spawn 방식에서 pickle 가능하려면 최상위 함수여야 함
-
-_worker_model = None  # 각 워커 프로세스의 PathLossModel 인스턴스
-
-
-def _worker_init(shp_path, dem_path, h_station, env, fc, n_samples):
-    """워커 프로세스 초기화 — DEM을 한 번만 로드."""
-    import sys, os
-    # 프로젝트 루트를 sys.path에 추가 (상대 import 지원)
-    proj_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    if proj_root not in sys.path:
-        sys.path.insert(0, proj_root)
-
-    from core.dem_loader import SpatialData
-    from core.propagation import PathLossModel as PLM
-
-    global _worker_model
-    sp = SpatialData(shp_path, dem_path)
-    sp.load()
-    _worker_model = PLM(sp, h_station=h_station, env=env,
-                        fc=fc, n_samples=n_samples)
+TOOLBAR_STYLE = f"""
+QToolBar {{
+    background:{PANEL};
+    border-bottom:1px solid #2a2f3b;
+    spacing:4px; padding:4px 8px;
+}}
+QToolButton {{
+    background:#252930; color:{TEXT};
+    border:1px solid #2a2f3b; border-radius:6px;
+    padding:8px 20px; font-size:12px; min-width:110px;
+}}
+QToolButton:hover  {{ background:#2e3545; border-color:#4f8ef7; }}
+QToolButton:pressed {{ background:#1c2535; }}
+QToolButton:checked {{
+    background:#1c3a5a; color:#7ab8e8; border-color:#4f8ef7;
+}}
+"""
 
 
-def _calc_row_proc(args):
-    """행 i의 상삼각 경로 손실 계산 (ProcessPool 태스크)."""
-    i, st_xi, st_yi, st_x_list, st_y_list, pl_limit_, N_ = args
-    row = []
-    for j in range(i + 1, N_):
-        pl = _worker_model.path_loss(
-            float(st_xi), float(st_yi),
-            float(st_x_list[j]), float(st_y_list[j]))
-        row.append((i, j, float(pl) if pl <= pl_limit_ else 0.0))
-    return row
+class CoverageWorker(QObject):
+    sig_done = pyqtSignal(object)
+    sig_err  = pyqtSignal(str)
 
-
-def calc_margin(p_edge: float) -> float:
-    """
-    셀 경계 커버리지 확률(p_edge) 기준 링크 마진 계산.
-
-    MATLAB 코드와 동일:
-      Margin = 53.383*P_edge^3 - 80.075*P_edge^2 + 57.512*P_edge - 15.41
-
-    Parameters
-    ----------
-    p_edge : 셀 경계 커버리지 확률 (0~1), 기본 0.9
-
-    Returns
-    -------
-    float : 마진 (dB)
-    """
-    return (53.383 * p_edge**3
-            - 80.075 * p_edge**2
-            + 57.512 * p_edge
-            - 15.41)
-
-
-def calc_pl_limit(pt_max: float, p_edge: float) -> float:
-    """
-    PL_limit 자동 계산.
-
-    MATLAB 코드와 동일:
-      PL_limit = Pt_max - (sens_SF12 + Margin)
-
-    SF12(가장 감도 좋은 설정) 기준으로 계산하므로
-    모든 SF를 포괄하는 최대 허용 경로 손실값.
-
-    Parameters
-    ----------
-    pt_max : 송신 출력 (dBm)
-    p_edge : 셀 경계 커버리지 확률
-
-    Returns
-    -------
-    float : PL_limit (dB)
-    """
-    margin = calc_margin(p_edge)
-    return pt_max - (SENS_DBM[-1] + margin)  # SENS_DBM[-1] = SF12 = -137 dBm
-
-
-# ══════════════════════════════════════════════════════════════
-# 파라미터 / 결과 데이터 클래스
-# ══════════════════════════════════════════════════════════════
-
-@dataclass
-class LinkParams:
-    """
-    링크 행렬 계산 파라미터.
-
-    PL_limit 결정 방식 (우선순위):
-      1. pl_limit_override > 0 이면 해당 값을 직접 사용
-      2. pl_limit_override <= 0 이면 pt_max + p_edge로 자동 계산
-         PL_limit = Pt_max - (sens_SF12 + Margin)
-
-    Parameters
-    ----------
-    num_stations    : station 수 (사용자 입력)
-    pt_max          : 송신 출력 (dBm), 기본 14 dBm
-    p_edge          : 셀 경계 커버리지 확률 (기본 0.9)
-    pl_limit_override: 0 이하면 자동 계산, 양수면 직접 지정
-    h_station       : station 안테나 지상 높이 (m), 기본 1.5 m
-    env             : Song's Model 환경 (1=Dense Urban ~ 4=Open)
-    fc              : 반송 주파수 (MHz)
-    n_samples       : DEM 단면 샘플 수
-    diff_order      : Deygout 재귀 깊이
-    seed            : 랜덤 시드
-    """
-    num_stations     : int   = 100
-    pt_max           : float = 14.0
-    p_edge           : float = 0.9
-    pl_limit_override: float = 0.0   # 0 이하 = 자동 계산
-    h_station        : float = 1.5
-    env              : int   = 2
-    fc               : float = 915.0
-    n_samples        : int   = 100
-    diff_order       : int   = 2
-    seed             : int   = 42
-
-    @property
-    def margin(self) -> float:
-        """셀 경계 마진 (dB)."""
-        return calc_margin(self.p_edge)
-
-    @property
-    def pl_limit(self) -> float:
-        """
-        실제 사용할 PL_limit (dB).
-        pl_limit_override > 0 이면 그 값, 아니면 자동 계산.
-        """
-        if self.pl_limit_override > 0:
-            return self.pl_limit_override
-        return calc_pl_limit(self.pt_max, self.p_edge)
-
-    def summary(self) -> str:
-        """파라미터 요약 문자열."""
-        mode = (f"직접 지정 ({self.pl_limit_override} dB)"
-                if self.pl_limit_override > 0
-                else f"자동 계산 (Pt={self.pt_max} dBm, P_edge={self.p_edge})")
-        return (
-            f"  Station 수      : {self.num_stations}개\n"
-            f"  송신 출력 Pt    : {self.pt_max} dBm\n"
-            f"  셀 경계 확률    : {self.p_edge} ({self.p_edge*100:.0f}%)\n"
-            f"  Margin          : {self.margin:.4f} dB\n"
-            f"  PL_limit        : {self.pl_limit:.4f} dB  [{mode}]\n"
-            f"  안테나 높이     : {self.h_station} m\n"
-            f"  환경            : {self.env} "
-            f"({['','Dense Urban','Urban','Suburban','Open'][self.env]})\n"
-            f"  주파수          : {self.fc} MHz\n"
-            f"  DEM 샘플 수     : {self.n_samples}\n"
-            f"  랜덤 시드       : {self.seed}"
-        )
-
-
-@dataclass
-class LinkResult:
-    """
-    링크 행렬 계산 결과.
-
-    Attributes
-    ----------
-    matrix    : (N, N) 경로 손실 행렬 (dB), 링크 불가 = 0
-    st_lon    : station 경도 배열 (N,)
-    st_lat    : station 위도 배열 (N,)
-    st_elev   : station 고도 배열 (N,) (m)
-    n_linked  : 유효 링크 수 (대칭 쌍 기준)
-    n_total   : 전체 가능 링크 수 N*(N-1)/2
-    link_ratio: 유효 링크 비율
-    """
-    matrix     : np.ndarray = field(default_factory=lambda: np.array([]))
-    st_lon     : np.ndarray = field(default_factory=lambda: np.array([]))
-    st_lat     : np.ndarray = field(default_factory=lambda: np.array([]))
-    st_elev    : np.ndarray = field(default_factory=lambda: np.array([]))
-    n_linked   : int   = 0
-    n_total    : int   = 0
-    link_ratio : float = 0.0
-
-
-# ══════════════════════════════════════════════════════════════
-# Station 배치
-# ══════════════════════════════════════════════════════════════
-
-def place_stations(spatial, num_stations: int,
-                   seed: int = 42,
-                   progress_cb: Callable[[str], None] | None = None
-                   ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """
-    성남시 경계 안에 num_stations개 station을 랜덤 배치.
-
-    배치 샘플링:
-      bbox 안에서 필요량의 3배를 한 번에 생성 →
-      shapely.contains 로 경계 내부 필터링 →
-      부족하면 반복
-
-    Returns
-    -------
-    st_lon, st_lat : 위경도 배열 (N,)
-    st_x,   st_y   : EPSG:3857 배열 (N,)
-    """
-    from shapely.geometry import MultiPoint
-
-    def _log(msg):
-        if progress_cb:
-            progress_cb(msg)
-        else:
-            print(msg)
-
-    np.random.seed(seed)
-    b = spatial.bounds  # [lon_min, lat_min, lon_max, lat_max]
-    poly = spatial.polygon_4326
-
-    lon_list, lat_list = [], []
-    _log(f"  Station {num_stations}개 배치 중...")
-
-    while len(lon_list) < num_stations:
-        batch = max(num_stations * 3, 500)
-        lons  = b[0] + (b[2] - b[0]) * np.random.rand(batch)
-        lats  = b[1] + (b[3] - b[1]) * np.random.rand(batch)
-        pts   = MultiPoint(list(zip(lons, lats)))
-        mask  = np.array([poly.contains(pt) for pt in pts.geoms])
-        lon_list.extend(lons[mask].tolist())
-        lat_list.extend(lats[mask].tolist())
-
-    st_lon = np.array(lon_list[:num_stations])
-    st_lat = np.array(lat_list[:num_stations])
-    st_x, st_y = spatial.lonlat_to_xy(st_lon, st_lat)
-
-    _log(f"  Station 배치 완료: {num_stations}개")
-    return st_lon, st_lat, st_x, st_y
-
-
-# ══════════════════════════════════════════════════════════════
-# 링크 행렬 계산기
-# ══════════════════════════════════════════════════════════════
-
-class LinkMatrixCalculator:
-    """
-    N×N station 간 경로 손실 행렬 계산기.
-
-    사용법
-    ------
-    calc = LinkMatrixCalculator(spatial, params)
-    result = calc.run(progress_cb=print)
-    calc.save_csv(result, "output/matrix.csv")
-    """
-
-    def __init__(self, spatial, params: LinkParams):
+    def __init__(self, spatial, gws, nodes):
+        super().__init__()
         self.spatial = spatial
-        self.params  = params
-        self.model   = PathLossModel(
-            spatial,
-            h_station  = params.h_station,
-            env        = params.env,
-            fc         = params.fc,
-            n_samples  = params.n_samples,
-            diff_order = params.diff_order,
-        )
+        self.gws     = gws
+        self.nodes   = nodes
 
-    def run(self,
-            progress_cb: Callable[[str], None] | None = None,
-            cache_dir: str = "cache"
-            ) -> LinkResult:
-        """
-        전체 링크 행렬 계산 실행.
-        동일 파라미터가 있으면 캐시에서 즉시 로드.
-        """
-        import os, hashlib, json
+    def run(self):
+        try:
+            from core.coverage import CoverageEngine
+            eng    = CoverageEngine(self.spatial)
+            result = eng.run(self.gws, self.nodes)
+            self.sig_done.emit(result)
+        except Exception:
+            import traceback
+            self.sig_err.emit(traceback.format_exc())
 
-        p = self.params
 
-        def _log(msg: str):
-            if progress_cb:
-                progress_cb(msg)
+class HeatmapWorker(QObject):
+    sig_log  = pyqtSignal(str)
+    sig_done = pyqtSignal(list)
+    sig_err  = pyqtSignal(str)
+
+    def __init__(self, spatial, gws, settings, env=2, fc=915.0):
+        super().__init__()
+        self.spatial  = spatial
+        self.gws      = gws
+        self.settings = settings
+        self.env, self.fc = env, fc
+
+    def run(self):
+        try:
+            import numpy as np
+            import matplotlib.pyplot as plt
+            from scipy.ndimage import label as nd_label
+            from core.coverage import CoverageEngine
+
+            eng    = CoverageEngine(self.spatial, self.env, self.fc)
+            min_rx = self.settings.get('min_rx', -126.6)
+            color_levels = self.settings.get('color_levels', [
+                {'pr': -90,  'color': '#FF2020'},
+                {'pr': -100, 'color': '#FF8C00'},
+                {'pr': -110, 'color': '#FFD700'},
+                {'pr': -120, 'color': '#00C94A'},
+                {'pr': -130, 'color': '#4f8ef7'},
+            ])
+            SF_SENS = {
+                7: -123.0, 8: -126.0, 9: -129.0,
+                10: -132.0, 11: -134.5, 12: -137.0
+            }
+            SF_COLORS = {
+                7: '#FF2020', 8: '#FF8C00', 9: '#FFD700',
+                10: '#00C94A', 11: '#4f8ef7', 12: '#9B59B6',
+            }
+            hms = []
+
+            for gw in self.gws:
+                self.sig_log.emit(f"{gw.callsign} 히트맵 계산 중...")
+                hm = eng.heatmap(gw, min_rx, cb=self.sig_log.emit)
+
+                ps = hm.get('ps')
+                cm = hm.get('cm')
+                contours = []
+
+                if ps is not None and cm is not None:
+                    step    = hm.get('step', 0.001)
+                    lon_min = hm.get('lon_min', 0)
+                    lat_min = hm.get('lat_min', 0)
+                    lon_ax  = np.linspace(lon_min, lon_min + step * ps.shape[1], ps.shape[1])
+                    lat_ax  = np.linspace(lat_min, lat_min + step * ps.shape[0], ps.shape[0])
+
+                    pr_m     = np.where(cm, ps, np.nan)
+                    ps_in_cm = ps[cm]
+
+                    if len(ps_in_cm) > 0:
+                        pr_min_in = float(ps_in_cm.min())
+                        pr_max_in = float(ps_in_cm.max())
+
+                        for lv in color_levels:
+                            pv = float(lv['pr'])
+                            if pv < pr_min_in or pv > pr_max_in:
+                                continue
+                            try:
+                                fig, ax = plt.subplots()
+                                cs = ax.contour(lon_ax, lat_ax, pr_m, levels=[pv])
+                                plt.close(fig)
+                            except Exception:
+                                plt.close('all')
+                                continue
+                            segs, lpts = [], []
+                            for col_segs in cs.allsegs:
+                                for seg in col_segs:
+                                    if len(seg) < 4:
+                                        continue
+                                    d = np.diff(seg, axis=0)
+                                    if float(np.sqrt((d**2).sum(axis=1)).sum()) < step:
+                                        continue
+                                    pts = [[float(p[1]), float(p[0])] for p in seg]
+                                    segs.append(pts)
+                                    mid = len(pts) // 2
+                                    lpts.append({
+                                        'lat' : pts[mid][0],
+                                        'lon' : pts[mid][1],
+                                        'text': f'{pv:.0f} dBm',
+                                    })
+                            if segs:
+                                contours.append({
+                                    'color'    : lv['color'],
+                                    'weight'   : 2.0,
+                                    'label'    : f'{pv:.0f} dBm',
+                                    'segments' : segs,
+                                    'label_pts': lpts,
+                                })
+
+                        sf_layers = []
+                        for sf, sens in SF_SENS.items():
+                            if not (ps[cm] >= sens).any():
+                                continue
+                            pr_sf = np.where(cm, ps, np.nan)
+                            try:
+                                fig, ax = plt.subplots()
+                                cs_sf = ax.contour(lon_ax, lat_ax, pr_sf, levels=[sens])
+                                plt.close(fig)
+                            except Exception:
+                                plt.close('all')
+                                continue
+                            segs_sf = []
+                            for col_segs in cs_sf.allsegs:
+                                for seg in col_segs:
+                                    if len(seg) < 4:
+                                        continue
+                                    d = np.diff(seg, axis=0)
+                                    if float(np.sqrt((d**2).sum(axis=1)).sum()) < step:
+                                        continue
+                                    segs_sf.append(
+                                        [[float(p[1]), float(p[0])] for p in seg])
+                            if segs_sf:
+                                sf_layers.append({
+                                    'sf'      : sf,
+                                    'color'   : SF_COLORS[sf],
+                                    'segments': segs_sf,
+                                    'label'   : f'SF{sf} ({sens:.1f} dBm)',
+                                })
+                        hm['sf_layers'] = sf_layers
+
+                hm['contours'] = contours
+                hms.append(hm)
+
+            self.sig_done.emit(hms)
+        except Exception:
+            import traceback
+            self.sig_err.emit(traceback.format_exc())
+
+
+class MainWindow(QMainWindow):
+    def __init__(self, shp_path, dem_path):
+        super().__init__()
+        self.setWindowTitle("LoRa Coverage Planner")
+        geo = QApplication.primaryScreen().availableGeometry()
+        self.setGeometry(int(geo.width()*0.03), int(geo.height()*0.03),
+                         int(geo.width()*0.94), int(geo.height()*0.94))
+        self.setStyleSheet(f"QMainWindow{{background:{DARK};}}")
+
+        self.spatial     = None
+        self._thread     = None
+        self._cov_thread = None
+        self._cov_worker = None
+        self._result     = None
+        self._heatmaps   = []
+        self._shp        = shp_path
+        self._dem        = dem_path
+        self._gw_win     = None
+        self._node_win   = None
+        self._opt_win    = None
+
+        self._build_ui()
+        self._load_spatial()
+
+    def _build_ui(self):
+        tb = QToolBar()
+        tb.setMovable(False)
+        tb.setIconSize(QSize(20, 20))
+        tb.setStyleSheet(TOOLBAR_STYLE)
+        self.addToolBar(Qt.TopToolBarArea, tb)
+
+        act_gw   = QAction("📡  GW 목록",      self)
+        act_node = QAction("📶  단말 목록",     self)
+        act_opt  = QAction("⚙   GW 최적 배치", self)
+        act_cfg  = QAction("🔧  설정",          self)
+        act_dist = QAction("📏  거리 측정", self, checkable=True)
+        
+        for a in [act_gw, act_node, act_opt, act_cfg, act_dist]:
+            tb.addAction(a)
+
+        act_gw.triggered.connect(self._open_gw_list)
+        act_node.triggered.connect(self._open_node_list)
+        act_opt.triggered.connect(self._open_optimize)
+        act_dist.triggered.connect(self._toggle_measure)
+        self._measuring = False
+        self._measure_pts = []
+        act_cfg.triggered.connect(
+            lambda: self.status.showMessage("설정 — 준비 중"))
+
+        self.map_w = MapWidget()
+        self.setCentralWidget(self.map_w)
+
+        self.status = QStatusBar()
+        self.setStatusBar(self.status)
+        self.lbl = QLabel("─")
+        self.lbl.setStyleSheet(
+            f"color:{MUTED};font-size:12px;padding:4px 12px;")
+        self.status.addPermanentWidget(self.lbl)
+
+        self.map_w.sig_map_clicked.connect(self._on_map_clicked)
+        self.map_w.sig_gw_dragged.connect(self._on_gw_dragged)
+        self.map_w.sig_nd_dragged.connect(self._on_nd_dragged)
+        # self.map_w.sig_map_right_clicked.connect(self._on_map_right_clicked)
+
+    # ── 창 열기 ─────────────────────────────────────────────
+
+    def _open_gw_list(self):
+        if self._gw_win is None:
+            self._gw_win = GWListWindow(self)
+            self._gw_win.sig_coverage_requested.connect(self._run_heatmap)
+            self._gw_win.sig_coverage_clear.connect(self._clear_heatmap)
+            self._gw_win.sig_coverage_analyze.connect(self._run_coverage)
+            self._gw_win.sig_map_refresh.connect(self._refresh_map)
+        self._gw_win.show(); self._gw_win.raise_()
+
+    def _open_node_list(self):
+        if self._node_win is None:
+            self._node_win = NodeListWindow(self)
+            self._node_win.sig_map_refresh.connect(self._refresh_map)
+        self._node_win.show(); self._node_win.raise_()
+
+    def _open_optimize(self):
+        # print("[DEBUG] _open_optimize called", flush=True)
+        if self.spatial is None:
+            # print("[DEBUG] spatial is None", flush=True)
+            self.status.showMessage("공간 데이터 로드 중..."); return
+        nodes = self._node_win.get_nodes() if self._node_win else []
+        # print(f"[DEBUG] nodes count: {len(nodes)}", flush=True)
+        if not nodes:
+            self.status.showMessage("단말 목록에 Node를 먼저 추가하세요.")
+            return
+        try:
+            # print(f"[DEBUG] _opt_win is None: {self._opt_win is None}", flush=True)
+            if self._opt_win is None:
+                # print("[DEBUG] importing GWOptimizeWindow...", flush=True)
+                from ui.gw_optimize_window import GWOptimizeWindow
+                # print("[DEBUG] creating GWOptimizeWindow...", flush=True)
+                self._opt_win = GWOptimizeWindow(self.spatial, nodes, self)
+                # print("[DEBUG] connecting signal...", flush=True)
+                self._opt_win.sig_result_ready.connect(self._on_optimize_done)
             else:
-                print(msg)
+                self._opt_win.set_nodes(nodes)
+            # print("[DEBUG] showing window...", flush=True)
+            self._opt_win.show(); self._opt_win.raise_()
+            # print("[DEBUG] window shown", flush=True)
+        except Exception:
+            import traceback
+            err = traceback.format_exc()
+            print(f"[ERROR] GW 최적 배치 창 열기 실패:\n{err}", flush=True)
+            self.status.showMessage("GW 최적 배치 창 오류 — 콘솔 확인")
 
-        # ── 캐시 키 생성 ──────────────────────────────────────
-        # 결과에 영향을 주는 파라미터만 포함
-        cache_params = {
-            'num_stations' : p.num_stations,
-            'h_station'    : p.h_station,
-            'env'          : p.env,
-            'fc'           : p.fc,
-            'n_samples'    : p.n_samples,
-            'diff_order'   : p.diff_order,
-            'pl_limit'     : round(p.pl_limit, 4),
-            'seed'         : p.seed,
-        }
-        key_str  = json.dumps(cache_params, sort_keys=True)
-        key_hash = hashlib.md5(key_str.encode()).hexdigest()[:12]
-        cache_path = os.path.join(cache_dir, f"pl_matrix_{key_hash}.npz")
+    # ── 커버리지 분석 ────────────────────────────────────────
 
-        # ── 캐시 히트 → 즉시 로드 ────────────────────────────
-        if os.path.exists(cache_path):
-            _log(f"[캐시] 이전 결과 로드 중... ({cache_path})")
-            data = np.load(cache_path)
-            result = LinkResult(
-                matrix     = data['matrix'],
-                st_lon     = data['st_lon'],
-                st_lat     = data['st_lat'],
-                st_elev    = data['st_elev'],
-                n_linked   = int(data['n_linked']),
-                n_total    = int(data['n_total']),
-                link_ratio = float(data['link_ratio']),
-            )
-            upper = result.matrix[np.triu_indices(p.num_stations, k=1)]
-            _log(f"[캐시] 로드 완료 | "
-                 f"유효 링크 {result.n_linked:,}/{result.n_total:,} "
-                 f"({result.link_ratio*100:.1f}%)")
-            return result
+    def _run_coverage(self, gws):
+        if self.spatial is None:
+            self.status.showMessage("공간 데이터 로드 중..."); return
+        nodes = self._node_win.get_nodes() if self._node_win else []
+        if not nodes:
+            self.status.showMessage("단말기를 먼저 추가하세요."); return
 
-        # ── ① station 배치 ────────────────────────────────────
-        _log("=" * 50)
-        _log(f"Station 수     : {p.num_stations}개")
-        _log(f"전체 링크 수   : {p.num_stations*(p.num_stations-1)//2:,}개 (대칭 기준)")
-        _log(f"Margin         : {p.margin:.4f} dB  (P_edge={p.p_edge})")
-        _log(f"PL_limit       : {p.pl_limit:.4f} dB"
-             + (" (자동 계산)" if p.pl_limit_override <= 0 else " (직접 지정)"))
-        _log("=" * 50)
+        # 이전 스레드 종료 후 재시작
+        if self._cov_thread and self._cov_thread.isRunning():
+            self._cov_thread.quit()
+            self._cov_thread.wait(2000)
 
-        st_lon, st_lat, st_x, st_y = place_stations(
-            self.spatial, p.num_stations, p.seed, progress_cb)
+        self.status.showMessage(
+            f"커버리지 분석 중: GW {len(gws)}개 × Node {len(nodes)}개...")
 
-        # ── ② station 고도 계산 (벡터화) ─────────────────────
-        _log("Station 고도 계산 중...")
-        st_elev = self.spatial.get_elevation_batch(st_x, st_y)
-        _log(f"  고도 범위: {st_elev.min():.0f}~{st_elev.max():.0f} m")
+        w = CoverageWorker(self.spatial, gws, nodes)
+        t = QThread()
+        w.moveToThread(t)
+        t.started.connect(w.run)
+        w.sig_done.connect(self._on_coverage_done)
+        w.sig_err.connect(lambda m: print(f"[COV ERR] {m}"))
+        self._cov_worker = w
+        self._cov_thread = t
+        t.start()
 
-        # ── ③ 행렬 계산 ───────────────────────────────────────
-        N      = p.num_stations
-        matrix = np.zeros((N, N), dtype=np.float32)
+    def _on_coverage_done(self, result):
+        self._result = result
+        gws   = self._gw_win.get_gws()    if self._gw_win   else []
+        nodes = self._node_win.get_nodes() if self._node_win else []
+        sel   = [h['callsign'] for h in self._heatmaps] if self._heatmaps else []
+        self.map_w.refresh(
+            gws=gws, nodes=nodes,
+            result=result,
+            heatmaps=self._heatmaps,
+            selected_gws=sel)
+        pct       = result.coverage_pct
+        macro_gain = getattr(result, 'macro_diversity_gain', 0.0)
+        avg_rx_gw  = getattr(result, 'avg_n_rx_gw', 0.0)
 
-        total_pairs = N * (N - 1) // 2
-        _log(f"경로 손실 행렬 계산 시작 ({total_pairs:,}쌍)...")
+        # 상태바 텍스트: 매크로 다이버시티 이득 포함
+        lbl_text = (
+            f"커버리지: {result.n_covered}/{result.n_total} ({pct:.1f}%) ")
+        if avg_rx_gw > 1.0:
+            lbl_text += (
+                f"| 평균 수신 GW: {avg_rx_gw:.1f}개 ")
+        if macro_gain > 0.1:
+            lbl_text += f"| 매크로 다이버시티 이득: +{macro_gain:.1f}dB"
+        self.lbl.setText(lbl_text)
+        self.status.showMessage(
+            f"커버리지 분석 완료: {pct:.1f}% "            f"| 매크로 다이버시티 이득: +{macro_gain:.1f}dB")
 
-        # ── 병렬 계산: ProcessPoolExecutor + initializer ──────
-        # 각 워커 프로세스가 시작할 때 DEM을 한 번만 로드
-        import multiprocessing as _mp
-        n_cpu = max(1, _mp.cpu_count() - 1)
+    # ── 지도 갱신 ───────────────────────────────────────────
 
-        from concurrent.futures import ProcessPoolExecutor as _ProcPool
+    def _refresh_map(self):
+        gws   = self._gw_win.get_gws()    if self._gw_win   else []
+        nodes = self._node_win.get_nodes() if self._node_win else []
+        sel   = [h['callsign'] for h in self._heatmaps] if self._heatmaps else []
+        self.map_w.refresh(
+            gws=gws, nodes=nodes,
+            result=self._result,
+            heatmaps=self._heatmaps,
+            selected_gws=sel)
 
-        # st_x, st_y를 list로 변환 (pickle 직렬화 용이)
-        st_x_list = st_x.tolist()
-        st_y_list = st_y.tolist()
+    def _clear_heatmap(self):
+        self._heatmaps = []
+        self._result   = None
+        gws   = self._gw_win.get_gws()    if self._gw_win   else []
+        nodes = self._node_win.get_nodes() if self._node_win else []
+        if callable(nodes): nodes = []
+        if callable(gws):   gws   = []
+        self.map_w.refresh(
+            gws=gws, nodes=nodes,
+            result=None, heatmaps=[], selected_gws=[])
+        self.lbl.setText("─")
+        self.status.showMessage("커버리지 초기화")
 
-        task_args = [
-            (i, st_x_list[i], st_y_list[i],
-             st_x_list, st_y_list, p.pl_limit, N)
-            for i in range(N - 1)
-        ]
+    # ── 드래그 이벤트 ────────────────────────────────────────
 
-        completed = [0]
-        spatial_   = self.spatial
-        params_    = p
+    def _on_gw_dragged(self, callsign, lon, lat):
+        if self._gw_win is None:
+            return
+        gws = self._gw_win.get_gws()
+        for i, gw in enumerate(gws):
+            if gw.callsign == callsign:
+                from core.coverage import GWEntry
+                gws[i] = GWEntry(gw.callsign, lon, lat,
+                                  gw.pt_dbm, gw.gt_dbi,
+                                  gw.lt_db, gw.hb_m, gw.enabled)
+                self._gw_win._gws = gws
+                self._gw_win._refresh_table(suppress_map=True)
+                self.status.showMessage(
+                    f"{callsign} 이동 → ({lat:.6f}, {lon:.6f})")
+                # 드래그 완료 시 자동 커버리지 재계산
+                self._run_coverage(gws)
+                break
 
+    def _on_nd_dragged(self, callsign, lon, lat):
+        if self._node_win is None:
+            return
+        nodes = self._node_win.get_nodes()
+        for i, nd in enumerate(nodes):
+            if nd.callsign == callsign:
+                from core.coverage import NodeEntry
+                nodes[i] = NodeEntry(nd.callsign, lon, lat,
+                                      nd.gr_dbi, nd.lr_db,
+                                      nd.hm_m, nd.min_rx_dbm)
+                self._node_win._nodes = nodes
+                self._node_win._refresh_table(suppress_map=True)
+                self.status.showMessage(
+                    f"{callsign} 이동 → ({lat:.6f}, {lon:.6f})")
+                break
+
+    # ── 우클릭 컨텍스트 메뉴 ─────────────────────────────────
+
+    # def _on_map_right_clicked(self, lon: float, lat: float):
+    #     from PyQt5.QtWidgets import QMenu
+    #     from core.coverage import GWEntry, NodeEntry
+
+    #     menu = QMenu(self)
+    #     menu.setStyleSheet("""
+    #         QMenu {
+    #             background:#1e2130; color:#e0e4ef;
+    #             border:1px solid #2a2f3b; border-radius:6px;
+    #             padding:4px;
+    #         }
+    #         QMenu::item { padding:6px 20px; border-radius:4px; }
+    #         QMenu::item:selected { background:#253a5a; color:#7ab8e8; }
+    #         QMenu::separator { height:1px; background:#2a2f3b; margin:4px 8px; }
+    #     """)
+
+    #     lbl = menu.addAction(f"📍 ({lat:.5f}, {lon:.5f})")
+    #     lbl.setEnabled(False)
+    #     menu.addSeparator()
+    #     act_gw   = menu.addAction("📡  이 위치에 GW 추가")
+    #     act_node = menu.addAction("📶  이 위치에 단말기 추가")
+
+    #     action = menu.exec_(QCursor.pos())
+
+    #     if action == act_gw:
+    #         if self._gw_win is None:
+    #             self._gw_win = GWListWindow(self)
+    #             self._gw_win.sig_coverage_requested.connect(self._run_heatmap)
+    #             self._gw_win.sig_coverage_clear.connect(self._clear_heatmap)
+    #             self._gw_win.sig_coverage_analyze.connect(self._run_coverage)
+    #             self._gw_win.sig_map_refresh.connect(self._refresh_map)
+    #         n  = len(self._gw_win._gws) + 1
+    #         gw = GWEntry(callsign=f"GW{n}", lon=lon, lat=lat)
+    #         self._gw_win._gws.append(gw)
+    #         self._gw_win._refresh_table(suppress_map=True)
+    #         self._refresh_map()
+    #         self.status.showMessage(f"GW{n} 추가 → ({lat:.5f}, {lon:.5f})")
+
+    #     elif action == act_node:
+    #         if self._node_win is None:
+    #             self._node_win = NodeListWindow(self)
+    #             self._node_win.sig_map_refresh.connect(self._refresh_map)
+    #         n  = len(self._node_win._nodes) + 1
+    #         nd = NodeEntry(callsign=f"Node{n}", lon=lon, lat=lat)
+    #         self._node_win._nodes.append(nd)
+    #         self._node_win._refresh_table(suppress_map=True)
+    #         self._refresh_map()
+    #         self.status.showMessage(f"Node{n} 추가 → ({lat:.5f}, {lon:.5f})")
+
+    # ── 지도 클릭 ────────────────────────────────────────────
+
+    def _on_map_clicked(self, lon, lat):
+        self.status.showMessage(f"지도 클릭: ({lat:.5f}, {lon:.5f})")
+        if self._gw_win and self._gw_win.isVisible():
+            self._gw_win.set_coord(lon, lat)
+        if self._node_win and self._node_win.isVisible():
+            self._node_win.set_coord(lon, lat)
+
+    # ── 히트맵 ──────────────────────────────────────────────
+
+    def _start_worker(self, worker):
+        if self._thread and self._thread.isRunning():
+            self._thread.quit()
+            self._thread.wait(2000)
+        t = QThread()
+        self._thread = t
+        worker.moveToThread(t)
+        t.started.connect(worker.run)
+        worker.sig_log.connect(lambda msg: self.status.showMessage(msg))
+        worker.sig_err.connect(self._on_error)
+        worker.sig_err.connect(lambda m: print(f"[ERROR] {m}"))
+        self._worker = worker
+        t.start()
+
+    def _run_heatmap(self, gws, settings):
+        if self.spatial is None:
+            self.status.showMessage("공간 데이터 로드 중..."); return
+        self.status.showMessage(
+            f"히트맵 계산 중: {', '.join(g.callsign for g in gws)}")
+        w = HeatmapWorker(self.spatial, gws, settings)
+        w.sig_done.connect(self._on_heatmap_done)
+        self._start_worker(w)
+
+    def _on_heatmap_done(self, hms):
+        self._heatmaps = hms
+        sel   = [h['callsign'] for h in hms]
+        gws   = self._gw_win.get_gws()    if self._gw_win   else []
+        nodes = self._node_win.get_nodes() if self._node_win else []
+        self.map_w.refresh(
+            gws=gws, nodes=nodes,
+            result=self._result,
+            heatmaps=hms,
+            selected_gws=sel)
+        self.lbl.setText(f"히트맵: {', '.join(sel)}")
+        self.status.showMessage(f"히트맵 완료: {', '.join(sel)}")
+
+    # ── 최적 배치 결과 ───────────────────────────────────────
+
+    def _on_optimize_done(self, result, nodes):
+        from core.coverage import GWEntry, CoverageResult, LinkResult
+
+        opt_gws = []
+        for i in range(result.num_gw):
+            opt_gws.append(GWEntry(
+                callsign=f"OPT-GW{i+1}",
+                lon=float(result.gw_lon[i]),
+                lat=float(result.gw_lat[i]),
+                pt_dbm=14.0, gt_dbi=2.15,
+                lt_db=0.0, hb_m=15.0, enabled=True))
+
+        if self._gw_win is None:
+            self._gw_win = GWListWindow(self)
+            self._gw_win.sig_coverage_requested.connect(self._run_heatmap)
+            self._gw_win.sig_coverage_clear.connect(self._clear_heatmap)
+            self._gw_win.sig_coverage_analyze.connect(self._run_coverage)
+            self._gw_win.sig_map_refresh.connect(self._refresh_map)
+
+        existing = [g for g in self._gw_win._gws
+                    if not g.callsign.startswith("OPT-")]
+        self._gw_win._gws = existing + opt_gws
+        self._gw_win._refresh_table(suppress_map=True)
+
+        cov_result = CoverageResult(n_total=len(nodes))
+        for ni in range(len(nodes)):
+            gw_no   = int(result.node_gw[ni])
+            cov     = gw_no > 0
+            best_gw = f"OPT-GW{gw_no}" if cov else ""
+            cov_result.nodes.append(LinkResult(
+                covered=cov, best_gw=best_gw,
+                best_pr=0.0, gw_prs={}))
+            if cov:
+                cov_result.n_covered += 1
+                cov_result.gw_counts[best_gw] = \
+                    cov_result.gw_counts.get(best_gw, 0) + 1
+
+        self._result = cov_result
+        all_gws = self._gw_win._gws
+        self.map_w.refresh(
+            gws=all_gws, nodes=nodes,
+            result=cov_result,
+            heatmaps=[], selected_gws=[])
+
+        pct = cov_result.coverage_pct
+        self.lbl.setText(
+            f"최적 배치: GW {result.num_gw}개 | 커버리지 {pct:.1f}%")
+        self.status.showMessage(
+            f"GW 최적 배치 완료 — GW {result.num_gw}개 | {pct:.1f}% 커버")
+
+    def _toggle_measure(self, checked):
+        self._measuring = checked
+        self._measure_pts = []
+        if checked:
+            self.status.showMessage("거리 측정 모드: 지도에서 두 점을 클릭하세요.")
+        else:
+            self.status.showMessage("거리 측정 모드 종료")
+
+    def _on_map_clicked(self, lon, lat):
+        if self._measuring:
+            self._measure_pts.append((lon, lat))
+            if len(self._measure_pts) == 1:
+                self.status.showMessage(
+                    f"시작점: ({lat:.5f}, {lon:.5f}) — 끝점을 클릭하세요.")
+            elif len(self._measure_pts) >= 2:
+                p1 = self._measure_pts[-2]
+                p2 = self._measure_pts[-1]
+                from ui.distance_window import haversine, bearing
+                dist = haversine(p1[0], p1[1], p2[0], p2[1])
+                brg  = bearing(p1[0], p1[1], p2[0], p2[1])
+                self.status.showMessage(
+                    f"거리: {dist:.3f} km  |  방위각: {brg:.1f}°  "
+                    f"| 다음 측정: 클릭 계속, 종료: 측정 버튼 OFF")
+                self.lbl.setText(f"📏 {dist:.3f} km / {brg:.1f}°")
+            return
+
+        self.status.showMessage(f"지도 클릭: ({lat:.5f}, {lon:.5f})")
+        if self._gw_win and self._gw_win.isVisible():
+            self._gw_win.set_coord(lon, lat)
+        if self._node_win and self._node_win.isVisible():
+            self._node_win.set_coord(lon, lat)
+
+
+    # ── 공통 ────────────────────────────────────────────────
+
+    def _on_error(self, msg):
+        print(f"[오류] {msg}")
+        self.status.showMessage("오류 발생 — 콘솔 확인")
+
+    def _load_spatial(self):
+        from core.dem_loader import SpatialData
+        self.status.showMessage("공간 데이터 로드 중...")
         try:
-            with _ProcPool(
-                max_workers = n_cpu,
-                initializer = _worker_init,
-                initargs    = (
-                    spatial_.shp_path,
-                    spatial_.dem_path,
-                    params_.h_station,
-                    params_.env,
-                    params_.fc,
-                    params_.n_samples,
-                ),
-            ) as pool:
-                for row_results in pool.map(
-                        _calc_row_proc, task_args, chunksize=10):
-                    for ri, rj, val in row_results:
-                        matrix[ri, rj] = val
-                        matrix[rj, ri] = val
-
-                    completed[0] += 1
-                    if (completed[0] % max(1, N // 10) == 0
-                            or completed[0] == N - 1):
-                        pct = completed[0] / (N - 1) * 100
-                        _log(f"  진행: {completed[0]}/{N-1} 행 완료 "
-                             f"({pct:.0f}%)  [Process×{n_cpu}]")
-
-        except Exception as proc_err:
-            # ProcessPool 실패 시 Thread로 fallback
-            _log(f"  [Process 실패 → Thread fallback] {proc_err}")
-            matrix = np.zeros((N, N), dtype=np.float32)
-            completed[0] = 0
-
-            def _calc_row_thread(i: int) -> tuple[int, list]:
-                row_results = []
-                for j in range(i + 1, N):
-                    pl = self.model.path_loss(
-                        float(st_x[i]), float(st_y[i]),
-                        float(st_x[j]), float(st_y[j]))
-                    val = float(pl) if pl <= p.pl_limit else 0.0
-                    row_results.append((i, j, val))
-                return i, row_results
-
-            with ThreadPoolExecutor(max_workers=min(8, N-1)) as pool:
-                futures = {
-                    pool.submit(_calc_row_thread, i): i
-                    for i in range(N - 1)}
-                for fut in as_completed(futures):
-                    i, row_results = fut.result()
-                    for ri, rj, val in row_results:
-                        matrix[ri, rj] = val
-                        matrix[rj, ri] = val
-                    completed[0] += 1
-                    if (completed[0] % max(1, N // 10) == 0
-                            or completed[0] == N - 1):
-                        pct = completed[0] / (N - 1) * 100
-                        _log(f"  진행: {completed[0]}/{N-1} 행 완료 "
-                             f"({pct:.0f}%)  [Thread]")
-
-        # ── ④ 결과 정리 ───────────────────────────────────────
-        # 상삼각에서 유효 링크 수 (0이 아닌 값)
-        upper = matrix[np.triu_indices(N, k=1)]
-        n_linked   = int(np.sum(upper > 0))
-        n_total    = total_pairs
-        link_ratio = n_linked / n_total if n_total > 0 else 0.0
-
-        _log("=" * 50)
-        _log(f"계산 완료!")
-        _log(f"  유효 링크: {n_linked:,} / {n_total:,} ({link_ratio*100:.1f}%)")
-        _log(f"  링크 불가: {n_total - n_linked:,} ({(1-link_ratio)*100:.1f}%)")
-        _log(f"  유효 PL 범위: "
-             f"{upper[upper>0].min():.1f}~{upper[upper>0].max():.1f} dB"
-             if n_linked > 0 else "  유효 링크 없음")
-        _log("=" * 50)
-
-        result = LinkResult(
-            matrix     = matrix,
-            st_lon     = st_lon,
-            st_lat     = st_lat,
-            st_elev    = st_elev,
-            n_linked   = n_linked,
-            n_total    = n_total,
-            link_ratio = link_ratio,
-        )
-
-        # ── 캐시 저장 ─────────────────────────────────────────
-        try:
-            os.makedirs(cache_dir, exist_ok=True)
-            np.savez_compressed(
-                cache_path,
-                matrix     = matrix,
-                st_lon     = st_lon,
-                st_lat     = st_lat,
-                st_elev    = st_elev,
-                n_linked   = np.array(n_linked),
-                n_total    = np.array(n_total),
-                link_ratio = np.array(link_ratio),
-            )
-            size_mb = os.path.getsize(cache_path) / 1024 / 1024
-            _log(f"[캐시] 저장 완료: {cache_path} ({size_mb:.1f} MB)")
+            self.spatial = SpatialData(self._shp, self._dem)
+            self.spatial.load()
+            self.status.showMessage("준비")
         except Exception as e:
-            _log(f"[캐시] 저장 실패 (무시): {e}")
-
-        return result
-
-    # ── CSV 저장 ──────────────────────────────────────────────
-    @staticmethod
-    def save_csv(result: LinkResult, out_path: str,
-                 progress_cb: Callable[[str], None] | None = None):
-        """
-        경로 손실 행렬을 CSV로 저장.
-
-        파일 구조:
-          행/열 헤더: ST1, ST2, ..., STN
-          값: 경로 손실 (dB), 링크 불가 = 0
-
-        Parameters
-        ----------
-        result   : LinkResult
-        out_path : 저장 경로 (예: "output/pl_matrix_100.csv")
-        """
-        def _log(msg):
-            if progress_cb:
-                progress_cb(msg)
-            else:
-                print(msg)
-
-        N       = result.matrix.shape[0]
-        headers = [f"ST{i+1}" for i in range(N)]
-        df      = pd.DataFrame(result.matrix,
-                               index=headers, columns=headers)
-
-        import os
-        os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
-        df.to_csv(out_path, float_format="%.2f")
-
-        size_mb = os.path.getsize(out_path) / 1024 / 1024
-        _log(f"CSV 저장 완료: {out_path} ({size_mb:.1f} MB)")
-
-    # ── station 좌표 CSV 저장 ────────────────────────────────
-    @staticmethod
-    def save_stations_csv(result: LinkResult, out_path: str,
-                          progress_cb: Callable[[str], None] | None = None):
-        """
-        Station 위치 정보를 별도 CSV로 저장.
-
-        컬럼: id, longitude, latitude, elevation_m
-        """
-        def _log(msg):
-            if progress_cb:
-                progress_cb(msg)
-            else:
-                print(msg)
-
-        N  = len(result.st_lon)
-        df = pd.DataFrame({
-            'id'          : np.arange(1, N + 1),
-            'longitude'   : result.st_lon,
-            'latitude'    : result.st_lat,
-            'elevation_m' : result.st_elev,
-        })
-
-        import os
-        os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
-        df.to_csv(out_path, index=False, float_format="%.6f")
-        _log(f"Station 좌표 저장 완료: {out_path}")
+            self.status.showMessage(f"공간 데이터 로드 실패: {e}")
+        self.map_w.refresh()

@@ -53,11 +53,12 @@ class MapWidget(QWidget):
         self.refresh()
 
     def refresh(self, gws=None, nodes=None, result=None,
-                heatmaps=None, selected_gws=None):
+                heatmaps=None, selected_gws=None, map_tile=None):
 
         c = [(BOUNDS[1] + BOUNDS[3]) / 2, (BOUNDS[0] + BOUNDS[2]) / 2]
+        tile = map_tile or "CartoDB Voyager"
         m = folium.Map(location=c, zoom_start=12,
-                       tiles="CartoDB Voyager", prefer_canvas=True)
+                       tiles=tile, prefer_canvas=True)
 
         # ── 히트맵 ──────────────────────────────────────────
         if heatmaps:

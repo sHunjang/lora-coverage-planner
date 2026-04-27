@@ -61,24 +61,18 @@ class LinkMatrixWorker(QObject):
                      for n in self.nodes]
             st_x  = np.array([float(xy[0]) for xy in st_xy])
             st_y  = np.array([float(xy[1]) for xy in st_xy])
-            
-            # 실효 출력 = Pt + Gt - Lt
-            eff_pt = p['pt'] + p.get('gt', 3.0) - p.get('lt', 0.0)
 
             model = PathLossModel(
                 self.spatial,
-                h_station = p['hm'],
-                env       = p['env'],
-                fc        = p['fc'],
+                h_station = p["hm"],
+                env       = p["env"],
+                fc        = p["fc"],
                 n_samples = 100,
             )
-            
-            # PL 계산 시 실효 출력 기준으로 비교
-            pl_limit = p['pl_limit'] + p.get('gt', 3.0) - p.get('lt', 0.0)
 
-            matrix   = np.zeros((N, N), dtype=np.float32)
-            pl_limit = p['pl_limit']
-            total    = N * (N - 1) // 2
+            matrix    = np.zeros((N, N), dtype=np.float32)
+            pl_limit  = p["pl_limit"]
+            total     = N * (N - 1) // 2
             completed = [0]
 
             self.sig_log.emit(
@@ -131,80 +125,96 @@ class GWOptimizeWorker(QObject):
 
     def run(self):
         try:
-            # print("[DEBUG] GWOptimizeWorker.run() 시작")
             import pandas as pd
             from core.gw_optimizer import GWOptimizer
-            # print("[DEBUG] import 완료")
 
-            df = pd.DataFrame([{
-                'longitude'  : n.lon,
-                'latitude'   : n.lat,
-                'elevation_m': 0.0,
-            } for n in self.nodes])
-            # print(f"[DEBUG] DataFrame 생성: {len(df)}행")
+            # ── Node 좌표 → 3857 변환 (벡터화) ──────────────
+            lons = np.array([n.lon for n in self.nodes])
+            lats = np.array([n.lat for n in self.nodes])
+            st_x, st_y = self.spatial.lonlat_to_xy(lons, lats)
+            st_x = np.array(st_x, dtype=np.float64)
+            st_y = np.array(st_y, dtype=np.float64)
+
+            # ── 실제 지형 고도 계산 (벡터화) ─────────────────
+            elevations = self.spatial.get_elevation_batch(st_x, st_y)
+            valid_cnt  = int(np.sum(elevations > 0))
+            self.sig_log.emit(
+                f"Node 고도 계산 완료: {valid_cnt}/{len(self.nodes)}개 유효 "
+                f"| 범위 {elevations.min():.0f}~{elevations.max():.0f}m")
+
+            df = pd.DataFrame({
+                "longitude"  : lons,
+                "latitude"   : lats,
+                "elevation_m": elevations,
+            })
 
             p   = self.params
-            # print(f"[DEBUG] params: {p}")
             opt = GWOptimizer(
                 pl_matrix           = self.pl_matrix,
                 stations            = df,
                 spatial             = self.spatial,
-                hb_gw               = p['hb_gw'],
-                pl_limit            = p['pl_limit'],
-                env                 = p['env'],
-                fc                  = p['fc'],
+                hb_gw               = p["hb_gw"],
+                pl_limit            = p["pl_limit"],
+                env                 = p["env"],
+                fc                  = p["fc"],
                 n_samples           = 100,
-                seed                = p.get('seed', 42),
-                min_cover           = p.get('min_cover', 3),
-                max_stations_per_gw = p.get('max_cover', 0),
-                use_traffic_weight  = p.get('use_traffic', True),
-                optimize_hb         = p.get('opt_hb', False),
+                seed                = p.get("seed", 42),
+                min_cover           = p.get("min_cover", 3),
+                max_stations_per_gw = p.get("max_cover", 0),
+                use_traffic_weight  = p.get("use_traffic", True),
+                optimize_hb         = p.get("opt_hb", False),
             )
-            # print("[DEBUG] GWOptimizer 객체 생성 완료")
             result = opt.run(progress_cb=self.sig_log.emit)
-            # print(f"[DEBUG] opt.run() 완료: GW {result.num_gw}개")
-            
-            # ── 미커버 Node에 GW 자동 추가 ──────────────────
-            uncovered = [i for i, gw_no in enumerate(result.node_gw)
-                         if gw_no == 0]
+
+            # ── 미커버 Node 처리 ────────────────────────────────
+            # truly_isolated: 물리적으로 어떤 GW로도 커버 불가 Node
+            # → GW를 추가해도 커버 불가이므로 제외
+            isolated   = getattr(result, 'truly_isolated', set())
+            uncovered  = [i for i, gw_no in enumerate(result.node_gw)
+                          if gw_no == 0 and i not in isolated]
+            n_isolated = len([i for i, gw_no in enumerate(result.node_gw)
+                              if gw_no == 0 and i in isolated])
+
+            if n_isolated > 0:
+                self.sig_log.emit(
+                    f"물리적 커버 불가 Node {n_isolated}개 → GW 추가 불필요 (지형 차단)")
 
             if uncovered:
                 self.sig_log.emit(
                     f"미커버 Node {len(uncovered)}개 → 바로 옆에 GW 추가 중...")
 
-                # 기존 GW 좌표
                 gw_lons = list(result.gw_lon)
                 gw_lats = list(result.gw_lat)
                 node_gw = list(result.node_gw)
 
                 for ni in uncovered:
                     nd = self.nodes[ni]
-                    # 단말기 위치 바로 옆에 GW 추가
-                    # (같은 위치면 PL이 너무 낮아 오류 가능 → 10m 오프셋)
                     offset = 0.0001  # ~10m
                     gw_lons.append(nd.lon + offset)
                     gw_lats.append(nd.lat + offset)
-                    gw_idx = len(gw_lons)  # 새 GW 인덱스 (1-based)
+                    gw_idx = len(gw_lons)
                     node_gw[ni] = gw_idx
                     self.sig_log.emit(
                         f"  Node{ni+1} → GW{gw_idx} 추가 "
                         f"({nd.lat:.5f}, {nd.lon:.5f})")
 
-                # result 업데이트
-                import numpy as np
                 result.gw_lon          = np.array(gw_lons)
                 result.gw_lat          = np.array(gw_lats)
                 result.node_gw         = np.array(node_gw)
                 result.num_gw          = len(gw_lons)
-                result.coverage        = 1.0
+                result.coverage        = float(
+                    np.sum(np.array(node_gw) > 0) / len(node_gw))
                 result.gw_cover_counts = np.bincount(
                     [g for g in node_gw if g > 0],
                     minlength=result.num_gw + 1)[1:]
 
                 self.sig_log.emit(
-                    f"미커버 해결 완료: GW {result.num_gw}개 | 커버리지 100%")
+                    f"미커버 해결 완료: GW {result.num_gw}개")
+            else:
+                self.sig_log.emit("모든 커버 가능 Node 배정 완료")
 
             self.sig_done.emit(result)
+
         except Exception:
             import traceback
             self.sig_error.emit(traceback.format_exc())
@@ -224,6 +234,7 @@ class GWOptimizeWindow(QDialog):
         self.nodes      = nodes
         self._thread    = None
         self._pl_matrix = None
+        self._pl_limit  = 0.0   # _update_pl()에서 설정됨, AttributeError 방지
 
         self._build()
 
@@ -232,13 +243,11 @@ class GWOptimizeWindow(QDialog):
         lay.setContentsMargins(12, 12, 12, 12)
         lay.setSpacing(8)
 
-        # Node 정보 라벨 (멤버로 저장)
         self.lbl_info = QLabel(
             f"Node {len(self.nodes)}개 기준으로 최적 GW 위치를 탐색합니다.")
         self.lbl_info.setStyleSheet(f"color:{MUTED};font-size:12px;")
         lay.addWidget(self.lbl_info)
 
-        # 전파 파라미터
         pg = QGroupBox("전파 파라미터")
         pg.setStyleSheet(
             f"QGroupBox{{color:{MUTED};border:1px solid {BORDER};"
@@ -246,7 +255,7 @@ class GWOptimizeWindow(QDialog):
             f"QGroupBox::title{{subcontrol-origin:margin;left:8px;}}")
         fl = QFormLayout(pg); fl.setSpacing(8)
 
-        def _sp(lo, hi, val, dec=1, suf=''):
+        def _sp(lo, hi, val, dec=1, suf=""):
             s = QDoubleSpinBox()
             s.setRange(lo, hi); s.setValue(val)
             s.setDecimals(dec); s.setSuffix(suf)
@@ -258,13 +267,13 @@ class GWOptimizeWindow(QDialog):
         self.sp_gt     = _sp(0,   30,   3.0,  2, " dBi")
         self.sp_lt     = _sp(0,   20,   0.0,  2, " dB")
         self.sp_p_edge = _sp(0.5, 1.0,  0.9, 2)
-        self.sp_fc     = _sp(400, 2000, 915.,1, " MHz")
+        self.sp_fc     = _sp(400, 2000, 915., 1, " MHz")
 
         fl.addRow("Node 안테나 높이 hm", self.sp_hm)
         fl.addRow("GW 안테나 높이 hb",   self.sp_hb)
         fl.addRow("GW 송신 출력 Pt",     self.sp_pt)
         fl.addRow("GW 안테나 이득 Gt",   self.sp_gt)
-        fl.addRow("GW 케이블 손실 Lt",   self.sp_lt) 
+        fl.addRow("GW 케이블 손실 Lt",   self.sp_lt)
         fl.addRow("P_edge",              self.sp_p_edge)
         fl.addRow("주파수",              self.sp_fc)
 
@@ -272,13 +281,10 @@ class GWOptimizeWindow(QDialog):
         self.lbl_pl.setStyleSheet(f"color:{MUTED};font-size:11px;")
         fl.addRow("", self.lbl_pl)
         self._update_pl()
-        self.sp_p_edge.valueChanged.connect(self._update_pl)
-        self.sp_pt.valueChanged.connect(self._update_pl)
-        self.sp_gt.valueChanged.connect(self._update_pl)
-        self.sp_lt.valueChanged.connect(self._update_pl)
+        for sp in [self.sp_p_edge, self.sp_pt, self.sp_gt, self.sp_lt]:
+            sp.valueChanged.connect(self._update_pl)
         lay.addWidget(pg)
 
-        # GW 배치 파라미터
         gg = QGroupBox("GW 배치 파라미터")
         gg.setStyleSheet(pg.styleSheet())
         gl = QFormLayout(gg); gl.setSpacing(8)
@@ -304,7 +310,6 @@ class GWOptimizeWindow(QDialog):
         gl.addRow("",               self.chk_opt_hb)
         lay.addWidget(gg)
 
-        # 실행 버튼
         btn_row = QHBoxLayout()
         self.btn_step1 = QPushButton("1단계: 링크 행렬 계산")
         self.btn_step1.setStyleSheet(BTN)
@@ -335,7 +340,6 @@ class GWOptimizeWindow(QDialog):
         self.btn_step2.clicked.connect(self._run_step2)
 
     def set_nodes(self, nodes):
-        """Node 목록 갱신 — 창이 이미 열려있을 때 호출."""
         self.nodes = nodes
         self.lbl_info.setText(
             f"Node {len(self.nodes)}개 기준으로 최적 GW 위치를 탐색합니다.")
@@ -345,13 +349,13 @@ class GWOptimizeWindow(QDialog):
         self.lbl_result.setText("─")
 
     def _update_pl(self):
-        p   = self.sp_p_edge.value()
-        pt  = self.sp_pt.value()
-        gt  = self.sp_gt.value()
-        lt  = self.sp_lt.value()
-        eirp = pt + gt - lt   # 실효 복사 전력
-        mg  = 53.383*p**3 - 80.075*p**2 + 57.512*p - 15.41
-        pl  = eirp - (-137.0 + mg)
+        p    = self.sp_p_edge.value()
+        pt   = self.sp_pt.value()
+        gt   = self.sp_gt.value()
+        lt   = self.sp_lt.value()
+        eirp = pt + gt - lt
+        mg   = 53.383*p**3 - 80.075*p**2 + 57.512*p - 15.41
+        pl   = eirp - (-137.0 + mg)
         try:
             d = 10 ** ((pl - 118.4) / 24.4)
         except Exception:
@@ -359,7 +363,6 @@ class GWOptimizeWindow(QDialog):
         self.lbl_pl.setText(
             f"EIRP = {eirp:.1f} dBm  |  PL_limit = {pl:.2f} dB  (최대 ~{d:.1f}km)")
         self._pl_limit = pl
-
 
     def _params(self):
         return dict(
@@ -386,7 +389,6 @@ class GWOptimizeWindow(QDialog):
         self._set_busy(True)
         self._log("=" * 40)
         self._log(f"[1단계] 링크 행렬 계산 시작 (Node {len(self.nodes)}개)")
-
         w = LinkMatrixWorker(self.spatial, self.nodes, self._params())
         w.sig_log.connect(self._log)
         w.sig_done.connect(self._on_step1_done)
@@ -394,7 +396,7 @@ class GWOptimizeWindow(QDialog):
         self._start(w)
 
     def _on_step1_done(self, matrix):
-        self._pl_matrix = matrix   # numpy matrix 직접 저장
+        self._pl_matrix = matrix
         self._set_busy(False)
         self.btn_step2.setEnabled(True)
         n_links = int((matrix > 0).sum() // 2)
@@ -411,7 +413,6 @@ class GWOptimizeWindow(QDialog):
         self._set_busy(True)
         self._log("=" * 40)
         self._log("[2단계] GW 최적 배치 시작")
-
         w = GWOptimizeWorker(
             self.spatial, self.nodes,
             self._pl_matrix, self._params())
@@ -424,12 +425,11 @@ class GWOptimizeWindow(QDialog):
         self._set_busy(False)
         n_gw = result.num_gw
         cov  = result.coverage * 100
-        avg  = float(result.gw_cover_counts.mean()) \
-               if len(result.gw_cover_counts) else 0
+        avg  = float(result.gw_cover_counts.mean())                if len(result.gw_cover_counts) else 0
         self._log(
             f"[2단계 완료] GW {n_gw}개 | 커버리지 {cov:.1f}% "
             f"| 평균 {avg:.1f}개/GW")
-        col = '#00C94A' if cov >= 90 else '#FFD700' if cov >= 70 else '#FF6B00'
+        col = "#00C94A" if cov >= 90 else "#FFD700" if cov >= 70 else "#FF6B00"
         self.lbl_result.setText(
             f"GW {n_gw}개 | 커버리지 {cov:.1f}% | 평균 {avg:.1f}개/GW")
         self.lbl_result.setStyleSheet(
@@ -438,15 +438,16 @@ class GWOptimizeWindow(QDialog):
 
     def _start(self, worker):
         if self._thread and self._thread.isRunning():
-            # print("[DEBUG] 이전 스레드 종료 대기 중...")
             self._thread.quit()
             self._thread.wait(3000)
-        t = QThread(); self._thread = t
+        t = QThread(self)
+        self._thread = t
+        self._worker = worker
         worker.moveToThread(t)
         t.started.connect(worker.run)
-        self._worker = worker
+        worker.sig_done.connect(t.quit)
+        worker.sig_error.connect(t.quit)
         t.start()
-        # print(f"[DEBUG] 스레드 시작: isRunning={t.isRunning()}")
 
     def _set_busy(self, busy):
         self.btn_step1.setEnabled(not busy)
@@ -461,4 +462,4 @@ class GWOptimizeWindow(QDialog):
     def _on_error(self, msg):
         self._set_busy(False)
         self._log(f"[오류] {msg}")
-        print(f"[ERROR] {msg}")
+        print(f"[ERROR] {msg}", flush=True)

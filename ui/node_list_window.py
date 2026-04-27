@@ -198,8 +198,17 @@ class NodeListWindow(QDialog):
 
     def _add_default(self):
         n = len(self._nodes) + 1
-        self._nodes.append(NodeEntry(callsign=f"Node{n}",
-                                      lon=127.10, lat=37.40))
+        # 부모(MainWindow)에서 설정값 가져오기
+        p = self.parent()
+        s = getattr(p, '_settings', {})
+        self._nodes.append(NodeEntry(
+            callsign   = f"Node{n}",
+            lon        = 127.10, lat=37.40,
+            gr_dbi     = s.get('nd_gr_dbi', 2.15),
+            lr_db      = s.get('nd_lr_db',  0.0),
+            hm_m       = s.get('nd_hm_m',   1.5),
+            min_rx_dbm = s.get('nd_min_rx', -126.6),
+        ))
         self._refresh_table()
 
     def _del_selected(self):
@@ -267,6 +276,7 @@ class NodeListWindow(QDialog):
             return
 
         try:
+            from shapely.geometry import MultiPoint
             b = list(spatial.bounds)
             b[0] = float(b[0])
             b[1] = float(b[1])
@@ -276,6 +286,7 @@ class NodeListWindow(QDialog):
             # print(f"[DEBUG] bounds: {b}")
             poly = spatial.polygon_4326
             
+            s = getattr(self.parent(), '_settings', {})
             np.random.seed(seed)
             lon_list, lat_list = [], []
 
@@ -284,17 +295,8 @@ class NodeListWindow(QDialog):
                 batch = max(count * 3, 200)
                 lons  = b[0] + (b[2] - b[0]) * np.random.rand(batch)
                 lats  = b[1] + (b[3] - b[1]) * np.random.rand(batch)
-                try:
-                    # shapely 2.x 벡터화 방식
-                    import shapely
-                    from shapely import points as shp_points
-                    geoms = shp_points(np.stack([lons, lats], axis=1))
-                    mask  = shapely.contains(poly, geoms)
-                except Exception:
-                    # fallback: 점 단위 contains (shapely 1.x 또는 오류 시)
-                    from shapely.geometry import Point
-                    mask = np.array([poly.contains(Point(lo, la))
-                                     for lo, la in zip(lons, lats)])
+                pts   = MultiPoint(list(zip(lons, lats)))
+                mask  = np.array([poly.contains(pt) for pt in pts.geoms])
                 lon_list.extend(lons[mask].tolist())
                 lat_list.extend(lats[mask].tolist())
 
@@ -307,10 +309,10 @@ class NodeListWindow(QDialog):
                     callsign  = f"Node{start_n + i + 1}",
                     lon       = float(lon_arr[i]),
                     lat       = float(lat_arr[i]),
-                    gr_dbi    = 2.15,
-                    lr_db     = 0.0,
-                    hm_m      = 1.5,
-                    min_rx_dbm= -126.6,
+                    gr_dbi    = s.get('nd_gr_dbi', 2.15),
+                    lr_db     = s.get('nd_lr_db',  0.0),
+                    hm_m      = s.get('nd_hm_m',   1.5),
+                    min_rx_dbm= s.get('nd_min_rx', -126.6),
                 ))
 
             self._refresh_table()

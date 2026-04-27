@@ -154,7 +154,16 @@ class GWListWindow(QDialog):
 
     def _add_default(self):
         n  = len(self._gws) + 1
-        gw = GWEntry(callsign=f"GW{n}", lon=127.10, lat=37.40)
+        # 부모(MainWindow)에서 설정값 가져오기
+        s  = getattr(self.parent(), '_settings', {})
+        gw = GWEntry(
+            callsign = f"GW{n}",
+            lon      = 127.10, lat=37.40,
+            pt_dbm   = s.get('gw_pt_dbm', 14.0),
+            gt_dbi   = s.get('gw_gt_dbi', 2.15),
+            lt_db    = s.get('gw_lt_db',  0.0),
+            hb_m     = s.get('gw_hb_m',   15.0),
+        )
         self._gws.append(gw)
         self._refresh_table()
 
