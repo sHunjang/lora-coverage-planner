@@ -13,24 +13,28 @@ from core.coverage import GWEntry, NodeEntry
 
 COLS = ['Node', '거리 (km)', '방위각 (°)', 'Pr (dBm)', '커버']
 
-
-def haversine(lon1, lat1, lon2, lat2) -> float:
-    """두 위경도 간 거리 (km)."""
-    R = 6371.0
-    phi1, phi2 = np.radians(lat1), np.radians(lat2)
-    dphi = np.radians(lat2 - lat1)
-    dlam = np.radians(lon2 - lon1)
-    a = np.sin(dphi/2)**2 + np.cos(phi1)*np.cos(phi2)*np.sin(dlam/2)**2
-    return R * 2 * np.arctan2(np.sqrt(a), np.sqrt(1-a))
+from core.utils import haversine, bearing
 
 
-def bearing(lon1, lat1, lon2, lat2) -> float:
-    """방위각 (0=북, 시계방향)."""
-    phi1, phi2 = np.radians(lat1), np.radians(lat2)
-    dlam = np.radians(lon2 - lon1)
-    x = np.sin(dlam) * np.cos(phi2)
-    y = np.cos(phi1)*np.sin(phi2) - np.sin(phi1)*np.cos(phi2)*np.cos(dlam)
-    return (np.degrees(np.arctan2(x, y)) + 360) % 360
+class NumericItem(QTableWidgetItem):
+    """숫자 기준 정렬을 지원하는 QTableWidgetItem."""
+    def __init__(self, text: str, sort_val=None):
+        super().__init__(text)
+        if sort_val is not None:
+            self._val = sort_val
+        else:
+            try:
+                self._val = float(text.replace(',','').replace('°','').strip())
+            except (ValueError, AttributeError):
+                self._val = text
+
+    def __lt__(self, other):
+        if isinstance(other, NumericItem):
+            try:
+                return float(self._val) < float(other._val)
+            except (TypeError, ValueError):
+                return str(self._val) < str(other._val)
+        return super().__lt__(other)
 
 
 class DistanceWindow(QDialog):
@@ -181,8 +185,12 @@ class DistanceWindow(QDialog):
                 f"{row['pr']:.1f}" if row['pr'] > -999 else "─",
                 "✓ 커버" if row['cov'] else "✗ 미커버",
             ]
+            _num_cols = {1, 2, 3}  # 거리, 방위각, Pr
             for c, v in enumerate(items):
-                it = QTableWidgetItem(str(v))
+                if c in _num_cols:
+                    it = NumericItem(str(v))
+                else:
+                    it = QTableWidgetItem(str(v))
                 it.setTextAlignment(Qt.AlignCenter)
                 self.tbl.setItem(r, c, it)
 

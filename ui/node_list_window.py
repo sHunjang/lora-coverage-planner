@@ -208,6 +208,7 @@ class NodeListWindow(QDialog):
             lr_db      = s.get('nd_lr_db',  0.0),
             hm_m       = s.get('nd_hm_m',   1.5),
             min_rx_dbm = s.get('nd_min_rx', -126.6),
+            indoor_loss_db = s.get('nd_indoor_loss', 0.0),
         ))
         self._refresh_table()
 
@@ -313,6 +314,7 @@ class NodeListWindow(QDialog):
                     lr_db     = s.get('nd_lr_db',  0.0),
                     hm_m      = s.get('nd_hm_m',   1.5),
                     min_rx_dbm= s.get('nd_min_rx', -126.6),
+                    indoor_loss_db = s.get('nd_indoor_loss', 0.0),
                 ))
 
             self._refresh_table()
@@ -353,6 +355,7 @@ class NodeListWindow(QDialog):
                         lr_db     = float(row.get('lr_db', 0)),
                         hm_m      = float(row.get('hm_m', 1.5)),
                         min_rx_dbm= float(row.get('min_rx_dbm', -126.6)),
+                        indoor_loss_db = float(row.get('indoor_loss_db', 0.0)),
                     ))
                 except Exception: continue
         self._refresh_table()
@@ -364,7 +367,7 @@ class NodeListWindow(QDialog):
         with open(path, 'w', newline='', encoding='utf-8-sig') as f:
             w = csv.writer(f)
             w.writerow(['callsign', 'lon', 'lat', 'gr_dbi',
-                        'lr_db', 'hm_m', 'min_rx_dbm'])
+                        'lr_db', 'hm_m', 'min_rx_dbm', 'indoor_loss_db'])
             for n in self._nodes:
                 w.writerow([n.callsign, n.lon, n.lat,
-                            n.gr_dbi, n.lr_db, n.hm_m, n.min_rx_dbm])
+                            n.gr_dbi, n.lr_db, n.hm_m, n.min_rx_dbm, n.indoor_loss_db])

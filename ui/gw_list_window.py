@@ -32,6 +32,7 @@ class GWListWindow(QDialog):
     sig_coverage_clear     = pyqtSignal()
     sig_coverage_analyze   = pyqtSignal(list)
     sig_map_refresh        = pyqtSignal()
+    sig_env_map_requested = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -72,10 +73,11 @@ class GWListWindow(QDialog):
         self.btn_cfg  = QPushButton("⚙ 설정");           self.btn_cfg.setStyleSheet(BTN)
         self.btn_imp  = QPushButton("CSV 가져오기");      self.btn_imp.setStyleSheet(BTN)
         self.btn_exp  = QPushButton("CSV 내보내기");      self.btn_exp.setStyleSheet(BTN)
+        self.btn_env = QPushButton("🌍 환경 분류 지도"); self.btn_env.setStyleSheet(BTN)
 
         for b in [self.btn_add, self.btn_del, self.btn_cov, self.btn_detail,
                   self.btn_anl, self.btn_clr, self.btn_prof, self.btn_dist,
-                  self.btn_lnk, self.btn_cfg, self.btn_imp, self.btn_exp]:
+                  self.btn_lnk, self.btn_cfg, self.btn_imp, self.btn_exp, self.btn_env]:
             top.addWidget(b)
         top.addStretch()
         lay.addLayout(top)
@@ -112,6 +114,7 @@ class GWListWindow(QDialog):
         self.btn_cfg.clicked.connect(self._open_settings)
         self.btn_imp.clicked.connect(self._import_csv)
         self.btn_exp.clicked.connect(self._export_csv)
+        self.btn_env.clicked.connect(self._show_env_map)
 
     def _refresh_table(self, suppress_map=False):
         self.tbl.setRowCount(0)
@@ -232,7 +235,7 @@ class GWListWindow(QDialog):
 
     def _open_linkbudget(self):
         from ui.linkbudget_window import LinkBudgetWindow
-        spatial  = getattr(self.parent(), 'spatial', None)
+        spatial = getattr(self.parent(), 'spatial', None)
         if spatial is None:
             QMessageBox.warning(self, "알림", "공간 데이터 로드 후 사용 가능합니다.")
             return
@@ -244,7 +247,8 @@ class GWListWindow(QDialog):
         if not self._gws:
             QMessageBox.information(self, "알림", "GW를 먼저 추가하세요.")
             return
-        dlg = LinkBudgetWindow(spatial, self._gws, nodes, parent=self)
+        main = self.parent()   # MainWindow를 parent로 전달
+        dlg  = LinkBudgetWindow(spatial, self._gws, nodes, parent=main)
         dlg.show()
 
     def _open_distance(self):
@@ -316,3 +320,16 @@ class GWListWindow(QDialog):
             for g in self._gws:
                 w.writerow([g.callsign, g.lon, g.lat,
                             g.pt_dbm, g.gt_dbi, g.lt_db, g.hb_m])
+                
+    # 메서드 추가
+    def _show_env_map(self):
+        spatial = getattr(self.parent(), 'spatial', None)
+        if spatial is None:
+            QMessageBox.warning(self, "알림", "공간 데이터 로드 후 사용 가능합니다.")
+            return
+        from core.coverage import CoverageEngine
+        self.sig_coverage_requested.emit([], {})  # 히트맵 초기화
+        # MainWindow의 _run_env_map 호출
+        main = self.parent()
+        if hasattr(main, '_run_env_map'):
+            main._run_env_map()

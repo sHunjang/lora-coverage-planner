@@ -17,6 +17,28 @@ COLS = ['Callsign', '거리(km)', '방위각(°)', 'Pr(dBm)',
         '커버', '경도', '위도', '높이(m)', '최소수신(dBm)']
 
 
+class NumericItem(QTableWidgetItem):
+    """숫자 기준 정렬을 지원하는 QTableWidgetItem."""
+    def __init__(self, text: str, sort_val=None):
+        super().__init__(text)
+        # sort_val이 없으면 텍스트에서 숫자 추출 시도
+        if sort_val is not None:
+            self._val = sort_val
+        else:
+            try:
+                self._val = float(text.replace(',', '').strip())
+            except (ValueError, AttributeError):
+                self._val = text  # 문자열 그대로
+
+    def __lt__(self, other):
+        if isinstance(other, NumericItem):
+            try:
+                return float(self._val) < float(other._val)
+            except (TypeError, ValueError):
+                return str(self._val) < str(other._val)
+        return super().__lt__(other)
+
+
 def haversine(lon1, lat1, lon2, lat2) -> float:
     R = 6371.0
     phi1, phi2 = np.radians(lat1), np.radians(lat2)
@@ -176,8 +198,12 @@ class GWNodeDetailWindow(QDialog):
                 f"{nd.hm_m:.1f}",
                 f"{nd.min_rx_dbm:.1f}",
             ]
+            _num_cols = {1, 2, 3, 5, 6, 7, 8}  # 숫자 정렬 컬럼
             for c, v in enumerate(items):
-                it = QTableWidgetItem(v)
+                if c in _num_cols:
+                    it = NumericItem(v)
+                else:
+                    it = QTableWidgetItem(v)
                 it.setTextAlignment(Qt.AlignCenter)
                 self.tbl.setItem(r, c, it)
 

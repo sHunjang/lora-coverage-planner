@@ -9,6 +9,7 @@ from PyQt5.QtGui import QCursor
 from ui.map_widget       import MapWidget
 from ui.gw_list_window   import GWListWindow
 from ui.node_list_window import NodeListWindow
+from ui.result_panel     import ResultPanel
 from core.coverage       import CoverageEngine, GWEntry
 
 DARK  = "#181b22"
@@ -236,8 +237,11 @@ class MainWindow(QMainWindow):
         act_opt  = QAction("⚙   GW 최적 배치", self)
         act_cfg  = QAction("🔧  설정",          self)
         act_dist = QAction("📏  거리 측정", self, checkable=True)
-        
-        for a in [act_gw, act_node, act_opt, act_cfg, act_dist]:
+        act_save = QAction("💾  결과 저장",     self)
+        act_load = QAction("📂  결과 불러오기", self)
+
+        for a in [act_gw, act_node, act_opt, act_cfg, act_dist,
+                  act_save, act_load]:
             tb.addAction(a)
 
         act_gw.triggered.connect(self._open_gw_list)
@@ -247,9 +251,24 @@ class MainWindow(QMainWindow):
         self._measuring = False
         self._measure_pts = []
         act_cfg.triggered.connect(self._open_settings)
+        act_save.triggered.connect(self._save_result)
+        act_load.triggered.connect(self._load_result)
 
-        self.map_w = MapWidget()
-        self.setCentralWidget(self.map_w)
+        # 중앙: 지도(좌) + 결과 패널(우) 분할
+        from PyQt5.QtWidgets import QSplitter
+        splitter = QSplitter(Qt.Horizontal)
+        self.map_w      = MapWidget()
+        self.result_panel = ResultPanel()
+        self.result_panel.setMaximumWidth(260)
+        self.result_panel.setMinimumWidth(200)
+        splitter.addWidget(self.map_w)
+        splitter.addWidget(self.result_panel)
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 0)
+        splitter.setSizes([1200, 240])
+        splitter.setStyleSheet(
+            f"QSplitter::handle{{background:#2a2f3b;width:2px;}}")
+        self.setCentralWidget(splitter)
 
         self.status = QStatusBar()
         self.setStatusBar(self.status)
@@ -272,6 +291,7 @@ class MainWindow(QMainWindow):
             self._gw_win.sig_coverage_clear.connect(self._clear_heatmap)
             self._gw_win.sig_coverage_analyze.connect(self._run_coverage)
             self._gw_win.sig_map_refresh.connect(self._refresh_map)
+            self._gw_win.sig_env_map_requested.connect(self._run_env_map)
         self._gw_win.show(); self._gw_win.raise_()
 
     def _open_node_list(self):
@@ -344,6 +364,7 @@ class MainWindow(QMainWindow):
             result=result,
             heatmaps=self._heatmaps,
             selected_gws=sel)
+        self.result_panel.update_result(result, gws)
         pct = result.coverage_pct
         self.lbl.setText(
             f"커버리지: {result.n_covered}/{result.n_total} ({pct:.1f}%)")
@@ -562,6 +583,11 @@ class MainWindow(QMainWindow):
         self.status.showMessage(
             f"GW 최적 배치 완료 — GW {result.num_gw}개 | {pct:.1f}% 커버")
 
+        # 배치 완료 후 커버리지 자동 실행
+        self.status.showMessage(
+            f"GW 최적 배치 완료 — 커버리지 분석 자동 시작...")
+        self._run_coverage(opt_gws)
+
     def _toggle_measure(self, checked):
         self._measuring = checked
         self._measure_pts = []
@@ -595,7 +621,204 @@ class MainWindow(QMainWindow):
             self._node_win.set_coord(lon, lat)
 
 
+    def _run_env_map(self):
+        if self.spatial is None: return
+        self.status.showMessage("환경 분류 지도 계산 중...")
+
+        class EnvMapWorker(QObject):
+            sig_done = pyqtSignal(dict)
+            sig_log  = pyqtSignal(str)
+            sig_err  = pyqtSignal(str)
+
+            def __init__(self, spatial, settings):
+                super().__init__()
+                self.spatial  = spatial
+                self.settings = settings
+
+            def run(self):
+                try:
+                    from core.coverage import CoverageEngine
+                    eng = CoverageEngine(self.spatial)
+                    hm  = eng.env_map(step=0.003, cb=self.sig_log.emit)
+                    self.sig_done.emit(hm)
+                except Exception:
+                    import traceback
+                    self.sig_err.emit(traceback.format_exc())
+
+        w = EnvMapWorker(self.spatial, self._settings)
+        w.sig_done.connect(self._on_env_map_done)
+        self._start_worker(w)
+
+    def _on_env_map_done(self, hm):
+        # 히트맵 형식으로 지도에 표시
+        self._heatmaps = [hm]
+        gws   = self._gw_win.get_gws()    if self._gw_win   else []
+        nodes = self._node_win.get_nodes() if self._node_win else []
+        tile  = self._settings.get('map_tile', 'CartoDB Voyager')
+        self.map_w.refresh(gws=gws, nodes=nodes,
+                        result=self._result,
+                        heatmaps=[hm],
+                        selected_gws=[], map_tile=tile)
+        self.status.showMessage(
+            "환경 분류 지도 완료 | 🔴Dense Urban 🟠Urban 🟡Suburban 🟢Open")
+        self.lbl.setText(
+            "ENV: 🔴Dense Urban 🟠Urban 🟡Suburban 🟢Open")
+
     # ── 공통 ────────────────────────────────────────────────
+
+    def _save_result(self):
+        """현재 커버리지 분석 결과와 GW/Node를 JSON으로 저장."""
+        import json
+        from PyQt5.QtWidgets import QFileDialog
+
+        # numpy/bool 타입을 Python 기본 타입으로 변환하는 인코더
+        class _Enc(json.JSONEncoder):
+            def default(self, o):
+                import numpy as np
+                if isinstance(o, (np.integer,)):  return int(o)
+                if isinstance(o, (np.floating,)):  return float(o)
+                if isinstance(o, (np.bool_,)):     return bool(o)
+                if isinstance(o, np.ndarray):      return o.tolist()
+                return super().default(o)
+
+        if self._result is None:
+            self.status.showMessage("저장할 분석 결과가 없습니다.")
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "결과 저장", "coverage_result.json", "JSON (*.json)")
+        if not path: return
+        gws   = self._gw_win.get_gws()    if self._gw_win   else []
+        nodes = self._node_win.get_nodes() if self._node_win else []
+        data = {
+            'gws'  : [{'callsign': g.callsign, 'lon': float(g.lon),
+                        'lat': float(g.lat), 'pt_dbm': float(g.pt_dbm),
+                        'gt_dbi': float(g.gt_dbi), 'lt_db': float(g.lt_db),
+                        'hb_m': float(g.hb_m), 'enabled': bool(g.enabled)}
+                       for g in gws],
+            'nodes': [{'callsign': n.callsign, 'lon': float(n.lon),
+                        'lat': float(n.lat), 'gr_dbi': float(n.gr_dbi),
+                        'lr_db': float(n.lr_db), 'hm_m': float(n.hm_m),
+                        'min_rx_dbm': float(n.min_rx_dbm)}
+                       for n in nodes],
+            'result': {
+                'n_covered' : int(self._result.n_covered),
+                'n_total'   : int(self._result.n_total),
+                'gw_counts' : {str(k): int(v)
+                               for k, v in self._result.gw_counts.items()},
+                'nodes'     : [{'covered' : bool(nd.covered),
+                                 'best_gw' : str(nd.best_gw),
+                                 'best_pr' : float(nd.best_pr),
+                                 'gw_prs'  : {str(k): float(v)
+                                              for k, v in nd.gw_prs.items()},
+                                 'macro_pr': float(getattr(nd,'macro_pr',-999.0)),
+                                 'n_rx_gw' : int(getattr(nd,'n_rx_gw',0))}
+                                for nd in self._result.nodes],
+            },
+        }
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, cls=_Enc, ensure_ascii=False, indent=2)
+        self.status.showMessage(f"결과 저장 완료: {path}")
+
+    def _load_result(self):
+        """저장된 JSON에서 GW/Node/결과 불러오기."""
+        import json
+        from PyQt5.QtWidgets import QFileDialog
+        from core.coverage import GWEntry, NodeEntry, CoverageResult, LinkResult
+        path, _ = QFileDialog.getOpenFileName(
+            self, "결과 불러오기", "", "JSON (*.json)")
+        if not path: return
+        try:
+            with open(path, encoding='utf-8') as f:
+                data = json.load(f)
+
+            # GW 복원
+            if self._gw_win is None:
+                self._gw_win = GWListWindow(self)
+                self._gw_win.sig_coverage_requested.connect(self._run_heatmap)
+                self._gw_win.sig_coverage_clear.connect(self._clear_heatmap)
+                self._gw_win.sig_coverage_analyze.connect(self._run_coverage)
+                self._gw_win.sig_map_refresh.connect(self._refresh_map)
+            self._gw_win._gws = [GWEntry(**g) for g in data.get('gws', [])]
+            self._gw_win._refresh_table(suppress_map=True)
+
+            # Node 복원
+            if self._node_win is None:
+                self._node_win = NodeListWindow(self)
+                self._node_win.sig_map_refresh.connect(self._refresh_map)
+            self._node_win._nodes = [NodeEntry(**n) for n in data.get('nodes', [])]
+            self._node_win._refresh_table(suppress_map=True)
+
+            # 결과 복원
+            r_data = data.get('result', {})
+            result = CoverageResult(
+                n_covered  = r_data.get('n_covered', 0),
+                n_total    = r_data.get('n_total', 0),
+                gw_counts  = r_data.get('gw_counts', {}),
+            )
+            for nd in r_data.get('nodes', []):
+                result.nodes.append(LinkResult(
+                    covered  = nd.get('covered', False),
+                    best_gw  = nd.get('best_gw', ''),
+                    best_pr  = nd.get('best_pr', -999.0),
+                    gw_prs   = nd.get('gw_prs', {}),
+                ))
+            self._result = result
+
+            gws   = self._gw_win.get_gws()
+            nodes = self._node_win.get_nodes()
+            tile  = self._settings.get('map_tile', 'CartoDB Voyager')
+            self.map_w.refresh(gws=gws, nodes=nodes,
+                               result=result, heatmaps=[],
+                               selected_gws=[], map_tile=tile)
+            self.result_panel.update_result(result, gws)
+            self.lbl.setText(
+                f"불러오기 완료: {result.n_covered}/{result.n_total} "
+                f"({result.coverage_pct:.1f}%)")
+            self.status.showMessage(f"결과 불러오기 완료: {path}")
+        except Exception:
+            import traceback
+            print(traceback.format_exc(), flush=True)
+            self.status.showMessage("결과 불러오기 실패 — 콘솔 확인")
+
+    def _run_env_map(self):
+        if self.spatial is None: return
+        self.status.showMessage("환경 분류 지도 계산 중...")
+
+        class EnvMapWorker(QObject):
+            sig_done = pyqtSignal(dict)
+            sig_log  = pyqtSignal(str)
+            sig_err  = pyqtSignal(str)
+            def __init__(self, spatial):
+                super().__init__()
+                self.spatial = spatial
+            def run(self):
+                try:
+                    from core.coverage import CoverageEngine
+                    eng = CoverageEngine(self.spatial)
+                    hm  = eng.env_map(step=0.003, cb=self.sig_log.emit)
+                    self.sig_done.emit(hm)
+                except Exception:
+                    import traceback
+                    self.sig_err.emit(traceback.format_exc())
+
+        w = EnvMapWorker(self.spatial)
+        w.sig_done.connect(self._on_env_map_done)
+        self._start_worker(w)
+
+    def _on_env_map_done(self, hm):
+        self._heatmaps = [hm]
+        gws   = self._gw_win.get_gws()    if self._gw_win   else []
+        nodes = self._node_win.get_nodes() if self._node_win else []
+        tile  = self._settings.get('map_tile', 'CartoDB Voyager')
+        self.map_w.refresh(gws=gws, nodes=nodes,
+                        result=self._result,
+                        heatmaps=[hm],
+                        selected_gws=[], map_tile=tile)
+        self.status.showMessage(
+            "환경 분류 지도 완료 | "
+            "🔴 Dense Urban  🟠 Urban  🟡 Suburban  🟢 Open")
+        self.lbl.setText(
+            "ENV: 🔴Dense Urban 🟠Urban 🟡Suburban 🟢Open")
 
     def _on_error(self, msg):
         print(f"[오류] {msg}")

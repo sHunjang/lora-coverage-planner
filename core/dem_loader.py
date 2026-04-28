@@ -191,3 +191,35 @@ class SpatialData:
     def xy_to_lonlat(self, x, y):
         """3857 → 위경도(4326) 변환. 배열 입력 지원."""
         return self._to_4326.transform(x, y)
+    
+    def get_env_code(self, x3857: float, y3857: float,
+                    radius_px: int = 20) -> int:
+        """
+        DSM 기반 주변 환경 자동 분류.
+        반경 radius_px 픽셀(기본 200m) 내 고도 통계로 env 코드 결정.
+
+        Returns: 1=Dense Urban, 2=Urban, 3=Suburban, 4=Open
+        """
+        col = int(np.clip((x3857 - self.ox) / self.res,
+                        radius_px, self.dem_cols - radius_px - 1))
+        row = int(np.clip((self.oy - y3857) / self.res,
+                        radius_px, self.dem_rows - radius_px - 1))
+
+        patch = self.dem[row-radius_px:row+radius_px,
+                        col-radius_px:col+radius_px]
+        valid = patch[~np.isnan(patch)]
+        if len(valid) == 0:
+            return 2  # 기본 Urban
+
+        mean_h  = float(np.mean(valid))
+        std_h   = float(np.std(valid))
+        # 지형 기준선 추정: 하위 10% 평균
+        terrain = float(np.percentile(valid, 10))
+        # 건물 높이 = DSM - 지형 기준선
+        build_h = mean_h - terrain
+
+        # 분류 기준 (성남시 DSM 기반 경험값)
+        if   build_h >= 20 and std_h >= 15: return 1  # Dense Urban
+        elif build_h >= 10 and std_h >= 8:  return 2  # Urban
+        elif build_h >= 3  and std_h >= 3:  return 3  # Suburban
+        else:                                return 4  # Open

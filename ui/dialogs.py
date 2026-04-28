@@ -121,15 +121,18 @@ class NodeParamDialog(QDialog):
         grp = QGroupBox("단말(Node) 파라미터")
         fl  = QFormLayout(grp); fl.setSpacing(8)
 
-        self.e_cs   = QLineEdit(nd.callsign)
-        self.e_lon  = QLineEdit(f"{nd.lon:.6f}")
-        self.e_lat  = QLineEdit(f"{nd.lat:.6f}")
-        self.sp_gr  = _dspin(0, 30,  nd.gr_dbi,    2, " dBi")
-        self.sp_lr  = _dspin(0, 20,  nd.lr_db,     2, " dB")
-        self.sp_fc  = _dspin(100, 2000, 915.0,      1, " MHz", 1.0)
-        self.sp_bw  = _dspin(1, 500, 125.0,         1, " kHz", 1.0)
-        self.sp_hm  = _dspin(0.1, 50, nd.hm_m,     1, " m")
-        self.sp_rxm = _dspin(-160, -50, nd.min_rx_dbm, 1, " dBm")
+        self.e_cs     = QLineEdit(nd.callsign)
+        self.e_lon    = QLineEdit(f"{nd.lon:.6f}")
+        self.e_lat    = QLineEdit(f"{nd.lat:.6f}")
+        self.sp_gr    = _dspin(0, 30,   nd.gr_dbi,       2, " dBi")
+        self.sp_lr    = _dspin(0, 20,   nd.lr_db,        2, " dB")
+        self.sp_fc    = _dspin(100, 2000, 915.0,          1, " MHz", 1.0)
+        self.sp_bw    = _dspin(1, 500, 125.0,             1, " kHz", 1.0)
+        self.sp_hm    = _dspin(0.1, 50, nd.hm_m,         1, " m")
+        self.sp_rxm   = _dspin(-160, -50, nd.min_rx_dbm, 1, " dBm")
+        self.sp_indoor= _dspin(0, 30,
+                               getattr(nd, 'indoor_loss_db', 0.0),
+                               1, " dB")
 
         fl.addRow("Callsign",          self.e_cs)
         fl.addRow("경도 (Longitude)",  self.e_lon)
@@ -140,7 +143,12 @@ class NodeParamDialog(QDialog):
         fl.addRow("대역폭",            self.sp_bw)
         fl.addRow("안테나 높이",       self.sp_hm)
         fl.addRow("최소 수신 레벨",    self.sp_rxm)
+        fl.addRow("실내 투과 손실",    self.sp_indoor)
         lay.addWidget(grp)
+
+        note = QLabel("실내 투과 손실: 실외=0dB, 목조=5~10dB, 콘크리트=10~25dB")
+        note.setStyleSheet(f"color:{MUTED};font-size:10px;")
+        lay.addWidget(note)
 
         btn_l = QHBoxLayout()
         ok  = QPushButton("확인"); ok.setProperty("role","ok")
@@ -152,13 +160,14 @@ class NodeParamDialog(QDialog):
 
     def result_node(self, orig: NodeEntry) -> NodeEntry:
         return NodeEntry(
-            callsign  = self.e_cs.text(),
-            lon       = float(self.e_lon.text()),
-            lat       = float(self.e_lat.text()),
-            gr_dbi    = self.sp_gr.value(),
-            lr_db     = self.sp_lr.value(),
-            hm_m      = self.sp_hm.value(),
-            min_rx_dbm= self.sp_rxm.value(),
+            callsign      = self.e_cs.text(),
+            lon           = float(self.e_lon.text()),
+            lat           = float(self.e_lat.text()),
+            gr_dbi        = self.sp_gr.value(),
+            lr_db         = self.sp_lr.value(),
+            hm_m          = self.sp_hm.value(),
+            min_rx_dbm    = self.sp_rxm.value(),
+            indoor_loss_db= self.sp_indoor.value(),
         )
 
 
@@ -174,7 +183,6 @@ class CoverageSettingsDialog(QDialog):
     def _build(self, s: dict):
         lay = QVBoxLayout(self); lay.setSpacing(10)
 
-        # 분석 파라미터
         g1 = QGroupBox("분석 파라미터")
         fl = QFormLayout(g1); fl.setSpacing(8)
         self.sp_rxh  = _dspin(0.1, 50,   s.get('rx_height', 1.5), 1, " m")
@@ -185,7 +193,6 @@ class CoverageSettingsDialog(QDialog):
         fl.addRow("최소 수신 레벨",   self.sp_mrx)
         lay.addWidget(g1)
 
-        # 커버리지 색상 설정 (ATDI 방식 — dBm 레벨별 색상)
         g2 = QGroupBox("커버리지 색상 (dBm 레벨별)")
         g2l = QVBoxLayout(g2)
 
@@ -199,11 +206,9 @@ class CoverageSettingsDialog(QDialog):
             f"gridline-color:{BORDER};}}"
             f"QHeaderView::section{{background:{DARK};color:{MUTED};"
             f"border:none;padding:4px;}}")
-        self.color_table.setEditTriggers(
-            QAbstractItemView.DoubleClicked)
+        self.color_table.setEditTriggers(QAbstractItemView.DoubleClicked)
         g2l.addWidget(self.color_table)
 
-        # 기본 색상 레벨 로드
         defaults = s.get('color_levels', [
             {'pr': -90,  'color': '#FF2020'},
             {'pr': -100, 'color': '#FF8C00'},
@@ -234,7 +239,6 @@ class CoverageSettingsDialog(QDialog):
         pr_item = QTableWidgetItem(str(pr))
         self.color_table.setItem(r, 0, pr_item)
 
-        # 색상 버튼
         col_btn = QPushButton()
         col_btn.setStyleSheet(
             f"background:{color};border:1px solid {BORDER};"
@@ -243,7 +247,6 @@ class CoverageSettingsDialog(QDialog):
         col_btn.clicked.connect(lambda _, b=col_btn: self._pick_color(b))
         self.color_table.setCellWidget(r, 1, col_btn)
 
-        # 삭제 버튼
         del_btn = QPushButton("✕")
         del_btn.setStyleSheet(
             f"background:#3a1a1a;color:#ff6060;"
@@ -252,6 +255,7 @@ class CoverageSettingsDialog(QDialog):
         self.color_table.setCellWidget(r, 2, del_btn)
 
     def _pick_color(self, btn: QPushButton):
+        from PyQt5.QtWidgets import QColorDialog
         cur = btn.property("color") or "#ffffff"
         col = QColorDialog.getColor(QColor(cur), self, "색상 선택")
         if col.isValid():
@@ -262,7 +266,6 @@ class CoverageSettingsDialog(QDialog):
                 f"border-radius:3px;min-height:22px;")
 
     def _del_row(self, row: int):
-        # 실제 행 위치 재계산 (버튼이 클릭된 시점의 행)
         for r in range(self.color_table.rowCount()):
             w = self.color_table.cellWidget(r, 2)
             if w and not w.isEnabled():
@@ -280,7 +283,7 @@ class CoverageSettingsDialog(QDialog):
                 levels.append({'pr': pr, 'color': col})
             except Exception:
                 continue
-        levels.sort(key=lambda x: -x['pr'])  # 높은 dBm 순
+        levels.sort(key=lambda x: -x['pr'])
         return {
             'rx_height'   : self.sp_rxh.value(),
             'radius_km'   : self.sp_rad.value(),

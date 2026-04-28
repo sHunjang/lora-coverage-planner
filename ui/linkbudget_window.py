@@ -167,10 +167,15 @@ class LinkBudgetWindow(QDialog):
         lay.addWidget(self.lbl)
 
     def _calc_all(self):
-        """모든 GW × Node 조합 Pr 계산."""
         from core.propagation import PathLossModel
         self.lbl.setText("계산 중...")
         QApplication_processEvents()
+
+        # 설정값 가져오기 (MainWindow._settings)
+        s      = getattr(self.parent(), '_settings', {}) if self.parent() else {}
+        env    = s.get('env', 2)
+        fc     = s.get('fc_mhz', 915.0)
+        n_samp = s.get('n_samples', 100)
 
         for gi, gw in enumerate(self.gws):
             gx, gy = self.spatial.lonlat_to_xy(gw.lon, gw.lat)
@@ -178,8 +183,8 @@ class LinkBudgetWindow(QDialog):
                 nx, ny = self.spatial.lonlat_to_xy(nd.lon, nd.lat)
                 model  = PathLossModel(
                     self.spatial, h_station=nd.hm_m,
-                    hb_gw=gw.hb_m, env=2, fc=915.0, n_samples=100)
-                pl = model.path_loss(
+                    hb_gw=gw.hb_m, env=env, fc=fc, n_samples=n_samp)
+                pl  = model.path_loss(
                     float(gx), float(gy), float(nx), float(ny))
                 bud = calc_link_budget(gw, nd, pl)
                 self._cache[(gi, ni)] = bud

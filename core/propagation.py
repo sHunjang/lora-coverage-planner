@@ -222,7 +222,10 @@ class PathLossModel:
         hb = hb_gw if hb_gw is not None else h_station
         hm = h_station
 
-        self.songs   = SongsModel(fc=fc, hb=hb, hm=hm, env=env)
+        self._auto_env = (env == 0)     # env=0 이면 경로별 자동 분류
+        _env = env if env != 0 else 2   # 초기 기본값 Urban
+        self.songs = SongsModel(fc=fc, hb=hb, hm=hm, env=_env)
+
         self.deygout = DeygoutDiff(fc=fc, max_order=diff_order)
 
         # Deygout 단면 샘플링 시 송수신 안테나 높이
@@ -267,41 +270,49 @@ class PathLossModel:
         return dists, elevs
 
     # ── 단일 링크 경로 손실 ──────────────────────────────────
-    def path_loss(self,
-                  x1: float, y1: float,
-                  x2: float, y2: float) -> float:
-        """
-        GW(x1,y1) ↔ station(x2,y2) 총 경로 손실 계산 (dB).
-        h_tx = GW 안테나 높이(hb_gw), h_rx = station 안테나 높이(h_station)
-        """
+    def path_loss(self, x1, y1, x2, y2) -> float:
         d_m  = max(np.hypot(x2 - x1, y2 - y1), 1.0)
         d_km = d_m / 1000.0
 
-        pl_songs = self.songs.path_loss(d_km)
+        # env 자동 분류: 경로 중간점 기준
+        if self._auto_env:
+            mx, my = (x1 + x2) / 2, (y1 + y2) / 2
+            env = self.spatial.get_env_code(mx, my)
+            _songs = SongsModel(fc=self.songs.fc,
+                                hb=self._h_tx, hm=self._h_rx,
+                                env=env)
+            pl_songs = _songs.path_loss(d_km)
+        else:
+            pl_songs = self.songs.path_loss(d_km)
+
         dists, elevs = self._sample_profile(x1, y1, x2, y2)
         l_diff = self.deygout.diffraction_loss(
             dists, elevs, h_tx=self._h_tx, h_rx=self._h_rx)
-
         return pl_songs + l_diff
 
     # ── 상세 분해 (디버그/분석용) ────────────────────────────
-    def path_loss_detail(self,
-                         x1: float, y1: float,
-                         x2: float, y2: float) -> dict:
-        """경로 손실 상세 분해 반환."""
+    def path_loss_detail(self, x1, y1, x2, y2) -> dict:
         d_m  = max(np.hypot(x2 - x1, y2 - y1), 1.0)
         d_km = d_m / 1000.0
 
-        pl_songs     = self.songs.path_loss(d_km)
-        dists, elevs = self._sample_profile(x1, y1, x2, y2)
-        l_diff       = self.deygout.diffraction_loss(
-            dists, elevs, h_tx=self._h_tx, h_rx=self._h_rx)
+        if self._auto_env:
+            mx, my = (x1 + x2) / 2, (y1 + y2) / 2
+            env = self.spatial.get_env_code(mx, my)
+            _songs = SongsModel(fc=self.songs.fc,
+                                hb=self._h_tx, hm=self._h_rx,
+                                env=env)
+            pl_songs = _songs.path_loss(d_km)
+        else:
+            pl_songs = self.songs.path_loss(d_km)
 
+        dists, elevs = self._sample_profile(x1, y1, x2, y2)
+        l_diff = self.deygout.diffraction_loss(
+            dists, elevs, h_tx=self._h_tx, h_rx=self._h_rx)
         return {
             'pl_total': pl_songs + l_diff,
             'pl_songs': pl_songs,
-            'l_diff':   l_diff,
-            'd_km':     d_km,
-            'dists':    dists,
-            'elevs':    elevs,
+            'l_diff'  : l_diff,
+            'd_km'    : d_km,
+            'dists'   : dists,
+            'elevs'   : elevs,
         }
