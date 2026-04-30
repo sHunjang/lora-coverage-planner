@@ -5,7 +5,7 @@
 [모델 구조]
 
   SongsModel   : 거리·환경·안테나 높이 기반 기본 경로 손실 (dB)
-  DeygoutDiff  : DEM 지형 단면을 따라 Fresnel-Kirchhoff 회절 손실 계산
+  DeygoutDiff  : 지형 회절 손실
   PathLossModel: 두 모델을 결합한 최종 경로 손실 계산기
 
 [Song's Model]
@@ -32,7 +32,24 @@
 [링크 불가 조건]
   PL_total > pl_limit → 해당 링크는 연결 불가 (0 반환)
 ────────────────────────────────────────────────────────────
+
+[전체 계산 흐름 요약]
+
+LOS:
+  PL = Song's Model
+     (변곡점 내 장애물 → +20dB)
+
+NLOS (장애물 1~3개):
+  LD_t  = J(v1) [+ J(v2) [+ J(v3)]]   ← Deygout 재귀
+  PL_FS = 20·log10(fc) + 20·log10(d_km) - 27.5492
+  DL    = PL_FS + LD_t
+  PL    = max(Song's, DL)
+
+NLOS (장애물 3개 이상):
+  PL    = PL_FS + 200dB  ← 사실상 커버 불가
+
 """
+
 from __future__ import annotations
 import numpy as np
 
@@ -44,6 +61,19 @@ import numpy as np
 class SongsModel:
     """
     Song's Model 기반 기본 경로 손실.
+    
+    역할: 거리와 환경에 따른 기본 경로손실 계산
+
+    BPL = 39.25 + 35.15·log(fc) - 19.21·log(hb)
+        + (42.5 - 5.2·log(hb))·log(d_km)
+    환경별 ahm:
+
+    Dense Urban: 18.9·log(hm) - 1.29·log(fc) - 11.5
+    Urban:       18.4·log(hm) - 0.99·log(fc) + 2.0
+    Suburban:    17.2·log(hm) - 0.6·log(fc) - 2.7
+    Open:        17.2·log(hm) + 13
+
+    PL = BPL - ahm(환경보정)
 
     Parameters
     ----------
@@ -91,6 +121,16 @@ class SongsModel:
 class DeygoutDiff:
     """
     Deygout 방법 기반 지형 회절 손실 계산기.
+    
+    역할: 지형/건물 때문에 신호가 꺾일 때의 추가 손실 계산
+
+
+    v = h_eff × √(2(d1+d2) / (λ·d1·d2))
+
+    h_eff = 장애물 높이 - 시선(LOS) 높이  (양수면 장애물이 시선 위로 튀어나옴)
+    d1    = 송신기 ~ 장애물 거리
+    d2    = 장애물 ~ 수신기 거리
+    λ     = 파장
 
     Parameters
     ----------
@@ -170,12 +210,48 @@ class DeygoutDiff:
         return loss
 
     def diffraction_loss(self, dists, elevs, h_tx, h_rx) -> float:
-        """DEM 단면 전체 회절 손실 (dB)."""
+        """
+        NLOS 회절 경로 손실
+        DL = PL_FS + LD_t
+
+        PL_FS: 전체 경로 자유공간 손실
+            = 20·log10(fc[MHz]) + 20·log10(d[km]) - 27.5492
+        LD_t:  Deygout knife-edge 누적 손실 = J(v1) + J(v2) + ...
+
+        장애물 3개 이상: PDF 명세에 따라 최저값(매우 큰 손실) 반환
+        """
         if len(dists) < 3:
             return 0.0
-        loss = self._deygout_recursive(
+
+        # ── 장애물 수 사전 파악 ──────────────────────────────────
+        # 시선(LOS line) 위로 튀어나온 점 = 잠재적 장애물
+        e_tx   = elevs[0]  + h_tx
+        e_rx   = elevs[-1] + h_rx
+        sight  = np.linspace(e_tx, e_rx, len(elevs))
+        n_obs  = int(np.sum(elevs > sight))  # 시선 위 샘플 수
+
+        # 시선 위 샘플이 많으면 실질적 장애물 3개 이상으로 간주
+        # (샘플 수 기반이므로 임계값은 샘플 밀도 고려: 3개 × 최소 간격)
+        if n_obs > max(3 * (len(dists) // 50), 8):
+            # PDF 명세: 장애물 3개 이상 → 최저값 처리
+            d_total_km = max(float(dists[-1]) / 1000.0, 0.001)
+            pl_fs = (20.0 * np.log10(self.fc)
+                    + 20.0 * np.log10(d_total_km)
+                    - 27.5492)
+            return pl_fs + 200.0  # 사실상 커버 불가
+
+        # ── LD_t: Deygout knife-edge 누적 손실 ───────────────────
+        ld_t = self._deygout_recursive(
             dists, elevs, 0, len(dists) - 1, h_tx, h_rx, self.max_order)
-        return max(0.0, loss)
+        ld_t = max(0.0, ld_t)
+
+        # ── PL_FS: 전체 경로 자유공간 손실 ───────────────────────
+        d_total_km = max(float(dists[-1]) / 1000.0, 0.001)
+        pl_fs = (20.0 * np.log10(self.fc)
+                + 20.0 * np.log10(d_total_km)
+                - 27.5492)
+
+        return pl_fs + ld_t
 
 
 # ══════════════════════════════════════════════════════════════
@@ -274,44 +350,76 @@ class PathLossModel:
         d_m  = max(np.hypot(x2 - x1, y2 - y1), 1.0)
         d_km = d_m / 1000.0
 
-        # env 자동 분류: 경로 중간점 기준
-        if self._auto_env:
-            mx, my = (x1 + x2) / 2, (y1 + y2) / 2
-            env = self.spatial.get_env_code(mx, my)
-            _songs = SongsModel(fc=self.songs.fc,
-                                hb=self._h_tx, hm=self._h_rx,
-                                env=env)
-            pl_songs = _songs.path_loss(d_km)
-        else:
-            pl_songs = self.songs.path_loss(d_km)
-
+        pl_songs = self.songs.path_loss(d_km)
         dists, elevs = self._sample_profile(x1, y1, x2, y2)
-        l_diff = self.deygout.diffraction_loss(
-            dists, elevs, h_tx=self._h_tx, h_rx=self._h_rx)
-        return pl_songs + l_diff
+
+        # ── LOS/NLOS 판단 ─────────────────────────────────────
+        gw_abs  = elevs[0] + self._h_tx   # GW 절대 고도
+        rx_abs  = elevs[-1] + self._h_rx  # 단말 절대 고도
+        sight   = np.linspace(gw_abs, rx_abs, len(elevs))
+        nlos    = bool(np.any(elevs > sight))
+
+        if not nlos:
+            # 가시거리(LOS): Song's Model만
+            # 변곡점 거리 내 GW 높이보다 높은 장애물 → +20dB
+            lam     = 3e8 / (self.songs.fc * 1e6)
+            r_inf_m = np.sqrt(4 * self._h_tx * self._h_rx / lam)
+            if d_m <= r_inf_m and len(elevs) > 2:
+                if float(np.max(elevs[1:-1])) > gw_abs:
+                    return pl_songs + 20.0
+            return pl_songs
+        else:
+            # NLOS: DL = PL_FS + LD_t
+            # max(Song's Model, DL) 적용
+            l_diff = self.deygout.diffraction_loss(
+                dists, elevs, h_tx=self._h_tx, h_rx=self._h_rx)
+            return max(pl_songs, l_diff)
 
     # ── 상세 분해 (디버그/분석용) ────────────────────────────
     def path_loss_detail(self, x1, y1, x2, y2) -> dict:
         d_m  = max(np.hypot(x2 - x1, y2 - y1), 1.0)
         d_km = d_m / 1000.0
 
-        if self._auto_env:
-            mx, my = (x1 + x2) / 2, (y1 + y2) / 2
-            env = self.spatial.get_env_code(mx, my)
-            _songs = SongsModel(fc=self.songs.fc,
-                                hb=self._h_tx, hm=self._h_rx,
-                                env=env)
-            pl_songs = _songs.path_loss(d_km)
-        else:
-            pl_songs = self.songs.path_loss(d_km)
-
+        pl_songs = self.songs.path_loss(d_km)
         dists, elevs = self._sample_profile(x1, y1, x2, y2)
-        l_diff = self.deygout.diffraction_loss(
-            dists, elevs, h_tx=self._h_tx, h_rx=self._h_rx)
+
+        gw_abs = elevs[0] + self._h_tx
+        rx_abs = elevs[-1] + self._h_rx
+        sight  = np.linspace(gw_abs, rx_abs, len(elevs))
+        nlos   = bool(np.any(elevs > sight))
+
+        lam     = 3e8 / (self.songs.fc * 1e6)
+        r_inf_m = np.sqrt(4 * self._h_tx * self._h_rx / lam)
+
+        if not nlos:
+            extra = 0.0
+            if d_m <= r_inf_m and len(elevs) > 2:
+                if float(np.max(elevs[1:-1])) > gw_abs:
+                    extra = 20.0
+            l_diff    = 0.0
+            pl_fs_val = 0.0   # ← 추가
+            ld_t      = 0.0   # ← 추가
+            pl_total  = pl_songs + extra
+        else:
+            ld_t = self.deygout._deygout_recursive(
+                dists, elevs, 0, len(dists)-1,
+                self._h_tx, self._h_rx, self.deygout.max_order)
+            ld_t = max(0.0, ld_t)
+
+            d_km_val  = max(float(dists[-1]) / 1000.0, 0.001)
+            pl_fs_val = (20.0 * np.log10(self.songs.fc)
+                        + 20.0 * np.log10(d_km_val)
+                        - 27.5492)
+            l_diff   = pl_fs_val + ld_t
+            pl_total = max(pl_songs, l_diff)
+
         return {
-            'pl_total': pl_songs + l_diff,
+            'pl_total': pl_total,
             'pl_songs': pl_songs,
             'l_diff'  : l_diff,
+            'pl_fs'   : pl_fs_val,
+            'ld_t'    : ld_t,
+            'nlos'    : nlos,
             'd_km'    : d_km,
             'dists'   : dists,
             'elevs'   : elevs,

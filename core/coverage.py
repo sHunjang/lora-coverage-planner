@@ -19,26 +19,20 @@ class GWEntry:
 
 @dataclass
 class NodeEntry:
-    callsign      : str   = "Node1"
-    lon           : float = 127.10
-    lat           : float = 37.40
-    gr_dbi        : float = 2.15
-    lr_db         : float = 0.0
-    hm_m          : float = 1.5
-    min_rx_dbm    : float = -126.6
-    indoor_loss_db: float = 0.0
+    callsign  : str   = "Node1"
+    lon       : float = 127.10
+    lat       : float = 37.40
+    gr_dbi    : float = 2.15
+    lr_db     : float = 0.0
+    hm_m      : float = 1.5
+    min_rx_dbm: float = -126.6
 
 @dataclass
 class LinkResult:
-    covered      : bool  = False
-    best_gw      : str   = ""
-    best_pr      : float = -999.0
-    gw_prs       : dict  = field(default_factory=dict)
-    macro_pr     : float = -999.0
-    n_rx_gw      : int   = 0
-    adr_sf       : int   = 0
-    adr_dr       : int   = 0
-    adr_toa_ms   : float = 0.0
+    covered   : bool  = False
+    best_gw   : str   = ""
+    best_pr   : float = -999.0
+    gw_prs    : dict  = field(default_factory=dict)
 
 @dataclass
 class CoverageResult:
@@ -50,40 +44,6 @@ class CoverageResult:
     @property
     def coverage_pct(self):
         return self.n_covered / self.n_total * 100 if self.n_total else 0
-
-    @property
-    def macro_diversity_gain(self) -> float:
-        gains = [n.macro_pr - n.best_pr
-                 for n in self.nodes
-                 if n.best_pr > -999 and n.n_rx_gw > 1]
-        return float(np.mean(gains)) if gains else 0.0
-
-    @property
-    def avg_n_rx_gw(self) -> float:
-        counts = [n.n_rx_gw for n in self.nodes]
-        return float(np.mean(counts)) if counts else 0.0
-
-    @property
-    def adr_sf_distribution(self) -> dict:
-        dist = {sf: 0 for sf in range(7, 13)}
-        for nd in self.nodes:
-            if nd.adr_sf > 0:
-                dist[nd.adr_sf] = dist.get(nd.adr_sf, 0) + 1
-        return dist
-
-    @property
-    def avg_toa_ms(self) -> float:
-        toas = [nd.adr_toa_ms for nd in self.nodes if nd.adr_toa_ms > 0]
-        return float(np.mean(toas)) if toas else 0.0
-
-
-# SF별 감도/DR/ToA 상수
-_SF_SENS  = {12:-137.0, 11:-134.5, 10:-132.0,
-              9:-129.0,   8:-126.0,  7:-123.0}
-_SF_TO_DR = {12:0, 11:1, 10:2, 9:3, 8:4, 7:5}
-_SF_TOA   = {12:1482.8, 11:741.4, 10:370.7,
-              9:185.3,   8:102.4,  7:61.7}
-_ADR_MARGIN_DB = 15.0
 
 
 class CoverageEngine:
@@ -127,38 +87,15 @@ class CoverageEngine:
                 gx, gy = float(gw_xy[gw.callsign][0]), float(gw_xy[gw.callsign][1])
                 model  = self._model(gw.hb_m, nd.hm_m)
                 pl     = model.path_loss(gx, gy, nx, ny)
-                pr     = (gw.pt_dbm + gw.gt_dbi - gw.lt_db
-                          - pl + nd.gr_dbi - nd.lr_db
-                          - nd.indoor_loss_db)
+                pr     = gw.pt_dbm + gw.gt_dbi - gw.lt_db - pl + nd.gr_dbi - nd.lr_db
                 gw_prs[gw.callsign] = round(float(pr), 1)
                 if pr > best_pr:
                     best_pr, best_gw = pr, gw.callsign
 
             cov = best_pr >= nd.min_rx_dbm
-
-            # 매크로 다이버시티
-            rx_gws   = [pr for pr in gw_prs.values() if pr >= nd.min_rx_dbm]
-            n_rx     = len(rx_gws)
-            macro_pr = (float(10 * np.log10(sum(10**(p/10) for p in rx_gws)))
-                        if n_rx > 0 else best_pr)
-
-            # ADR SF 결정 (마진 15dB 기준)
-            adr_sf = 0
-            for sf in sorted(_SF_SENS.keys(), reverse=True):
-                if macro_pr >= _SF_SENS[sf] + _ADR_MARGIN_DB:
-                    adr_sf = sf
-                    break
-            if adr_sf == 0 and macro_pr >= _SF_SENS[12]:
-                adr_sf = 12
-
             result.nodes.append(LinkResult(
                 covered=cov, best_gw=best_gw,
-                best_pr=round(best_pr, 1), gw_prs=gw_prs,
-                macro_pr=round(macro_pr, 1), n_rx_gw=n_rx,
-                adr_sf=adr_sf,
-                adr_dr=_SF_TO_DR.get(adr_sf, 0),
-                adr_toa_ms=_SF_TOA.get(adr_sf, 0.0),
-            ))
+                best_pr=round(best_pr, 1), gw_prs=gw_prs))
             if cov:
                 result.n_covered += 1
                 result.gw_counts[best_gw] = result.gw_counts.get(best_gw, 0) + 1
@@ -169,16 +106,239 @@ class CoverageEngine:
         _log(f"완료: {result.n_covered}/{result.n_total}개 ({result.coverage_pct:.1f}%)")
         return result
 
-    def heatmap(self, gw, min_rx, step=0.001, cb=None, use_deygout=False):
+    def heatmap(self, gw, min_rx, step=0.0015, cb=None,
+            use_deygout=False, radius_km=12.0,
+            pr_min=None, pr_max=None):
+        """
+        PDF 명세 기반 히트맵 계산.
+        - LOS: Song's Model (변곡점 거리 내 장애물 시 +20dB)
+        - NLOS: max(Song's, PL_FS + Deygout)
+        GW 중심 radius_km 반경 + 성남시 경계 교집합으로 계산 범위 제한.
+        pr_min: 범례 최솟값 미만 픽셀 투명 처리
+        """
         import base64, io
         import matplotlib; matplotlib.use('Agg')
         import matplotlib.pyplot as plt, matplotlib.colors as mc
         from PIL import Image
         from pyproj import Transformer
         from scipy.ndimage import gaussian_filter, label as nd_label
+        from core.propagation import SongsModel, DeygoutDiff
 
         b = self.spatial.bounds
-        lmin, latmin, lmax, latmax = b
+
+        # GW 중심 반경으로 계산 범위 제한 + 성남시 경계 교집합
+        deg_lat = radius_km / 111.0
+        deg_lon = radius_km / (111.0 * np.cos(np.radians(gw.lat)))
+
+        lmin   = max(b[0], gw.lon - deg_lon)
+        latmin = max(b[1], gw.lat - deg_lat)
+        lmax   = min(b[2], gw.lon + deg_lon)
+        latmax = min(b[3], gw.lat + deg_lat)
+
+        lons = np.arange(lmin, lmax, step)
+        lats = np.arange(latmin, latmax, step)
+        lon2d, lat2d = np.meshgrid(lons, lats)
+        fl = lon2d.ravel(); fa = lat2d.ravel()
+
+        try:
+            import shapely
+            from shapely import points as _sp, contains as _sc
+            mask_poly = _sc(self.spatial.polygon_4326,
+                            _sp(np.stack([fl, fa], axis=1)))
+        except Exception:
+            from shapely.geometry import Point
+            mask_poly = np.array([self.spatial.polygon_4326.contains(
+                Point(lo, la)) for lo, la in zip(fl, fa)])
+
+        dist_deg = np.sqrt(((fl - gw.lon) / deg_lon)**2 +
+                           ((fa - gw.lat) / deg_lat)**2) * radius_km
+        mask_circle = dist_deg <= radius_km
+        mask = mask_poly & mask_circle
+
+        tr = Transformer.from_crs('EPSG:4326', 'EPSG:3857', always_xy=True)
+        px, py   = tr.transform(fl, fa)
+        gx_arr, gy_arr = tr.transform(gw.lon, gw.lat)
+        gx, gy   = float(gx_arr), float(gy_arr)
+
+        sp           = self.spatial
+        dem          = sp.dem
+        ox, oy, res  = sp.ox, sp.oy, sp.res
+        rows_, cols_ = sp.dem_rows, sp.dem_cols
+        h_tx         = float(gw.hb_m)
+        h_rx         = 1.5
+        N_SAMP       = min(50, self.n_samples)
+
+        songs   = SongsModel(fc=self.fc, hb=h_tx, hm=h_rx, env=self.env)
+        deygout = DeygoutDiff(fc=self.fc, max_order=2)
+        eirp    = float(gw.pt_dbm + gw.gt_dbi - gw.lt_db)
+
+        gw_col  = int(np.clip((gx - ox) / res, 0, cols_ - 1))
+        gw_row  = int(np.clip((oy - gy) / res, 0, rows_ - 1))
+        gw_elev = dem[gw_row, gw_col]
+        if np.isnan(gw_elev): gw_elev = 0.0
+        gw_abs_h = gw_elev + h_tx
+
+        lam     = 3e8 / (self.fc * 1e6)
+        r_inf_m = np.sqrt(4 * h_tx * h_rx / lam)
+
+        idx = np.where(mask)[0]
+        pf  = np.full(len(px), float(min_rx) - 50.0)
+
+        if cb: cb(f"히트맵 계산 중... ({len(idx)}개 격자점)")
+
+        px_m = px[idx].astype(np.float64)
+        py_m = py[idx].astype(np.float64)
+        dx   = px_m - gx
+        dy   = py_m - gy
+        d_m  = np.maximum(np.hypot(dx, dy), 1.0)
+        d_km = d_m / 1000.0
+
+        pl_songs_arr = (39.25
+                        + 35.15 * np.log10(self.fc)
+                        - 19.21 * np.log10(h_tx)
+                        + (42.5 - 5.2 * np.log10(h_tx)) * np.log10(d_km)
+                        - songs.ahm)
+
+        pr_vals = np.full(len(idx), float(min_rx) - 50.0)
+
+        for k in range(len(idx)):
+            x2, y2 = px_m[k], py_m[k]
+            dm      = d_m[k]
+
+            xs    = np.linspace(gx, x2, N_SAMP)
+            ys    = np.linspace(gy, y2, N_SAMP)
+            cs    = np.clip(((xs - ox) / res).astype(int), 0, cols_ - 1)
+            rs    = np.clip(((oy - ys) / res).astype(int), 0, rows_ - 1)
+            elevs = dem[rs, cs]
+            elevs = np.where(np.isnan(elevs), 0.0, elevs)
+            dists = np.linspace(0.0, dm, N_SAMP)
+
+            rx_elev = elevs[-1] + h_rx
+            sight   = np.linspace(gw_abs_h, rx_elev, N_SAMP)
+            nlos    = bool(np.any(elevs > sight))
+
+            if not nlos:
+                pl = pl_songs_arr[k]
+                if dm <= r_inf_m:
+                    max_obs = float(np.max(elevs[1:-1])) if len(elevs) > 2 else 0.0
+                    if max_obs > gw_abs_h:
+                        pl += 20.0
+            else:
+                e_tx   = elevs[0]  + h_tx
+                e_rx   = elevs[-1] + h_rx
+                sight2 = np.linspace(e_tx, e_rx, N_SAMP)
+                n_obs  = int(np.sum(elevs > sight2))
+
+                if n_obs > max(3 * (N_SAMP // 50), 8):
+                    d_km_v = max(dm / 1000.0, 0.001)
+                    pl_fs  = (20.0 * np.log10(self.fc)
+                              + 20.0 * np.log10(d_km_v) - 27.5492)
+                    pl = pl_fs + 200.0
+                else:
+                    ld_t = deygout._deygout_recursive(
+                        dists, elevs, 0, len(dists)-1,
+                        h_tx, h_rx, deygout.max_order)
+                    ld_t  = max(0.0, ld_t)
+                    d_km_v = max(dm / 1000.0, 0.001)
+                    pl_fs  = (20.0 * np.log10(self.fc)
+                              + 20.0 * np.log10(d_km_v) - 27.5492)
+                    dl = pl_fs + ld_t
+                    pl = max(pl_songs_arr[k], dl)
+
+            pr_vals[k] = eirp - pl
+
+        pf[idx] = pr_vals
+
+        pg            = pf.reshape(lon2d.shape)
+        boundary_mask = mask.reshape(lon2d.shape)
+        pg_masked     = np.where(boundary_mask, pg, np.nan)
+
+        pg_filled = np.where(np.isnan(pg_masked), float(min_rx) - 50.0, pg_masked)
+        ps        = gaussian_filter(pg_filled.astype(float), sigma=0.5)
+        ps        = np.where(boundary_mask, ps, float(min_rx) - 50.0)
+
+        cov_raw    = ps >= min_rx
+        labeled, n = nd_label(cov_raw)
+
+        if n > 0:
+            gw_col_g = int(np.clip((gw.lon - lmin) / step, 0, lon2d.shape[1] - 1))
+            gw_row_g = int(np.clip((gw.lat - latmin) / step, 0, lon2d.shape[0] - 1))
+            if labeled[gw_row_g, gw_col_g] > 0:
+                main_label = labeled[gw_row_g, gw_col_g]
+            else:
+                r0 = max(0, gw_row_g - 10); r1 = min(lon2d.shape[0], gw_row_g + 10)
+                c0 = max(0, gw_col_g - 10); c1 = min(lon2d.shape[1], gw_col_g + 10)
+                region      = labeled[r0:r1, c0:c1]
+                labels_near = region[region > 0]
+                if len(labels_near) > 0:
+                    main_label = int(np.bincount(labels_near).argmax())
+                else:
+                    sizes      = np.bincount(labeled.ravel())[1:]
+                    main_label = int(np.argmax(sizes)) + 1
+            cm = (labeled == main_label) & boundary_mask
+        else:
+            cm = cov_raw & boundary_mask
+
+        pr_max_actual = float(np.nanmax(pg_masked)) if boundary_mask.any() else float(min_rx)
+        vmin = float(pr_min) if pr_min is not None else float(min_rx)
+        vmax = float(pr_max) if pr_max is not None else max(pr_max_actual, vmin + 1.0)
+
+        cmap = plt.colormaps['jet']
+        norm = mc.Normalize(vmin=vmin, vmax=vmax, clip=True)
+        rgba = cmap(norm(ps)).astype(float)
+        pn   = np.clip((ps - vmin) / (vmax - vmin), 0, 1)
+
+        # pr_min 미만 픽셀 투명 처리
+        cm_display = cm & (ps >= vmin)
+        rgba[..., 3] = np.where(cm_display, 0.45 + 0.35 * pn, 0.0)
+
+        img      = Image.fromarray((rgba[::-1, :, :] * 255).astype(np.uint8), 'RGBA')
+        w, h_img = img.size
+        img      = img.resize((w * 2, h_img * 2), Image.BILINEAR)
+        buf      = io.BytesIO()
+        img.save(buf, 'PNG', optimize=True)
+        url      = f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode()}"
+
+        if cb: cb("히트맵 완료")
+        return {
+            'url'     : url,
+            'bounds'  : [[latmin, lmin], [latmax, lmax]],
+            'callsign': gw.callsign,
+            'min_rx'  : min_rx,
+            'ps'      : ps,
+            'cm'      : cm,
+            'lon_min' : lmin,
+            'lat_min' : latmin,
+            'step'    : step,
+        }
+
+    def heatmap_combined(self, gws, min_rx, step=0.0015,
+                        cb=None, radius_km=12.0,
+                        pr_min=None, pr_max=None):
+        """
+        여러 GW의 히트맵을 합성 — 각 격자점마다 최대 Pr 선택.
+        겹치는 구간은 신호가 가장 강한 GW 기준으로 표시.
+        pr_min: 범례 최솟값 미만 픽셀 투명 처리
+        """
+        import base64, io
+        import matplotlib; matplotlib.use('Agg')
+        import matplotlib.pyplot as plt, matplotlib.colors as mc
+        from PIL import Image
+        from pyproj import Transformer
+        from scipy.ndimage import gaussian_filter, label as nd_label
+        from core.propagation import SongsModel, DeygoutDiff
+
+        b = self.spatial.bounds
+
+        deg_lat   = radius_km / 111.0
+        mean_lat  = float(np.mean([g.lat for g in gws]))
+        deg_lon   = radius_km / (111.0 * np.cos(np.radians(mean_lat)))
+
+        lmin   = max(b[0], min(g.lon for g in gws) - deg_lon)
+        latmin = max(b[1], min(g.lat for g in gws) - deg_lat)
+        lmax   = min(b[2], max(g.lon for g in gws) + deg_lon)
+        latmax = min(b[3], max(g.lat for g in gws) + deg_lat)
+
         lons = np.arange(lmin, lmax, step)
         lats = np.arange(latmin, latmax, step)
         lon2d, lat2d = np.meshgrid(lons, lats)
@@ -196,108 +356,138 @@ class CoverageEngine:
 
         tr = Transformer.from_crs('EPSG:4326', 'EPSG:3857', always_xy=True)
         px, py = tr.transform(fl, fa)
-        gx, gy = tr.transform(gw.lon, gw.lat)
-        gx, gy = float(gx), float(gy)
 
-        from core.propagation import SongsModel, DeygoutDiff
+        sp           = self.spatial
+        dem          = sp.dem
+        ox, oy, res  = sp.ox, sp.oy, sp.res
+        rows_, cols_ = sp.dem_rows, sp.dem_cols
+        N_SAMP       = min(50, self.n_samples)
+        lam          = 3e8 / (self.fc * 1e6)
 
-        idx = np.where(mask)[0]
-        pf  = np.full(len(px), float(min_rx) - 50.0)
+        pr_max_grid = np.full(len(px), float(min_rx) - 50.0)
 
-        if len(idx) > 0:
+        for gi, gw in enumerate(gws):
+            if cb: cb(f"히트맵 계산 중... GW {gi+1}/{len(gws)}: {gw.callsign}")
+
+            gx_arr, gy_arr = tr.transform(gw.lon, gw.lat)
+            gx, gy   = float(gx_arr), float(gy_arr)
+            h_tx     = float(gw.hb_m)
+            h_rx     = 1.5
+            eirp     = float(gw.pt_dbm + gw.gt_dbi - gw.lt_db)
+            r_inf_m  = np.sqrt(4 * h_tx * h_rx / lam)
+
+            songs   = SongsModel(fc=self.fc, hb=h_tx, hm=h_rx, env=self.env)
+            deygout = DeygoutDiff(fc=self.fc, max_order=2)
+
+            gw_col   = int(np.clip((gx - ox) / res, 0, cols_ - 1))
+            gw_row   = int(np.clip((oy - gy) / res, 0, rows_ - 1))
+            gw_elev  = dem[gw_row, gw_col]
+            if np.isnan(gw_elev): gw_elev = 0.0
+            gw_abs_h = gw_elev + h_tx
+
+            deg_lon_gw = radius_km / (111.0 * np.cos(np.radians(gw.lat)))
+            deg_lat_gw = radius_km / 111.0
+            dist_deg   = np.sqrt(((fl - gw.lon) / deg_lon_gw)**2 +
+                                 ((fa - gw.lat) / deg_lat_gw)**2) * radius_km
+            gw_mask    = mask & (dist_deg <= radius_km)
+            idx        = np.where(gw_mask)[0]
+
             px_m = px[idx].astype(np.float64)
             py_m = py[idx].astype(np.float64)
-
-            dx = px_m - gx
-            dy = py_m - gy
+            dx   = px_m - gx
+            dy   = py_m - gy
             d_m  = np.maximum(np.hypot(dx, dy), 1.0)
             d_km = d_m / 1000.0
 
-            songs = SongsModel(fc=self.fc, hb=float(gw.hb_m),
-                               hm=1.5, env=self.env)
-            pl_songs = (39.25
-                        + 35.15 * np.log10(self.fc)
-                        - 19.21 * np.log10(gw.hb_m)
-                        + (42.5 - 5.2 * np.log10(gw.hb_m)) * np.log10(d_km)
-                        - songs.ahm)
+            pl_songs_arr = (39.25
+                            + 35.15 * np.log10(self.fc)
+                            - 19.21 * np.log10(h_tx)
+                            + (42.5 - 5.2 * np.log10(h_tx)) * np.log10(d_km)
+                            - songs.ahm)
 
-            if use_deygout:
-                N_DIFF  = min(30, self.n_samples)
-                deygout = DeygoutDiff(fc=self.fc, max_order=1)
-                sp      = self.spatial
-                dem     = sp.dem
-                ox, oy, res = sp.ox, sp.oy, sp.res
-                rows_, cols_ = sp.dem_rows, sp.dem_cols
-                h_tx, h_rx  = float(gw.hb_m), 1.5
-                l_diff = np.zeros(len(idx), dtype=np.float64)
-                for k in range(len(idx)):
-                    x2, y2 = px_m[k], py_m[k]
-                    xs = np.linspace(gx, x2, N_DIFF)
-                    ys = np.linspace(gy, y2, N_DIFF)
-                    cs = np.clip(((xs-ox)/res).astype(int), 0, cols_-1)
-                    rs = np.clip(((oy-ys)/res).astype(int), 0, rows_-1)
-                    elevs = dem[rs, cs]
-                    elevs = np.where(np.isnan(elevs), 50.0, elevs)
-                    dists = np.linspace(0, d_m[k], N_DIFF)
-                    l_diff[k] = deygout.diffraction_loss(dists, elevs, h_tx, h_rx)
-            else:
-                l_diff = np.zeros(len(idx), dtype=np.float64)
+            for k in range(len(idx)):
+                x2, y2 = px_m[k], py_m[k]
+                dm      = d_m[k]
 
-            pl_total = pl_songs + l_diff
-            eirp     = float(gw.pt_dbm + gw.gt_dbi - gw.lt_db)
-            pf[idx]  = eirp - pl_total
+                xs    = np.linspace(gx, x2, N_SAMP)
+                ys    = np.linspace(gy, y2, N_SAMP)
+                cs    = np.clip(((xs - ox) / res).astype(int), 0, cols_ - 1)
+                rs    = np.clip(((oy - ys) / res).astype(int), 0, rows_ - 1)
+                elevs = dem[rs, cs]
+                elevs = np.where(np.isnan(elevs), 0.0, elevs)
+                dists = np.linspace(0.0, dm, N_SAMP)
 
-        pg = pf.reshape(lon2d.shape)
-        boundary_mask = mask.reshape(lon2d.shape)
-        pg_masked = np.where(boundary_mask, pg, np.nan)
+                rx_elev = elevs[-1] + h_rx
+                sight   = np.linspace(gw_abs_h, rx_elev, N_SAMP)
+                nlos    = bool(np.any(elevs > sight))
 
-        pg_filled = np.where(np.isnan(pg_masked), float(min_rx)-50.0, pg_masked)
-        ps = gaussian_filter(pg_filled.astype(float), sigma=1.5)
-        ps = np.where(boundary_mask, ps, float(min_rx)-50.0)
-
-        cov_raw = ps >= min_rx
-        labeled, n = nd_label(cov_raw)
-
-        if n > 0:
-            gw_col = int(np.clip((gw.lon-lmin)/step, 0, lon2d.shape[1]-1))
-            gw_row = int(np.clip((gw.lat-latmin)/step, 0, lon2d.shape[0]-1))
-            if labeled[gw_row, gw_col] > 0:
-                main_label = labeled[gw_row, gw_col]
-            else:
-                r0 = max(0, gw_row-10); r1 = min(lon2d.shape[0], gw_row+10)
-                c0 = max(0, gw_col-10); c1 = min(lon2d.shape[1], gw_col+10)
-                region = labeled[r0:r1, c0:c1]
-                labels_near = region[region > 0]
-                if len(labels_near) > 0:
-                    main_label = int(np.bincount(labels_near).argmax())
+                if not nlos:
+                    pl = pl_songs_arr[k]
+                    if dm <= r_inf_m:
+                        max_obs = float(np.max(elevs[1:-1])) if len(elevs) > 2 else 0.0
+                        if max_obs > gw_abs_h:
+                            pl += 20.0
                 else:
-                    sizes = np.bincount(labeled.ravel())[1:]
-                    main_label = int(np.argmax(sizes)) + 1
-            cm = (labeled == main_label) & boundary_mask
-        else:
-            cm = cov_raw & boundary_mask
+                    e_tx   = elevs[0]  + h_tx
+                    e_rx   = elevs[-1] + h_rx
+                    sight2 = np.linspace(e_tx, e_rx, N_SAMP)
+                    n_obs  = int(np.sum(elevs > sight2))
+
+                    if n_obs > max(3 * (N_SAMP // 50), 8):
+                        d_km_v = max(dm / 1000.0, 0.001)
+                        pl_fs  = (20.0 * np.log10(self.fc)
+                                  + 20.0 * np.log10(d_km_v) - 27.5492)
+                        pl = pl_fs + 200.0
+                    else:
+                        ld_t = deygout._deygout_recursive(
+                            dists, elevs, 0, len(dists)-1,
+                            h_tx, h_rx, deygout.max_order)
+                        ld_t  = max(0.0, ld_t)
+                        d_km_v = max(dm / 1000.0, 0.001)
+                        pl_fs  = (20.0 * np.log10(self.fc)
+                                  + 20.0 * np.log10(d_km_v) - 27.5492)
+                        pl = max(pl_songs_arr[k], pl_fs + ld_t)
+
+                pr = eirp - pl
+                if pr > pr_max_grid[idx[k]]:
+                    pr_max_grid[idx[k]] = pr
+
+        pg            = pr_max_grid.reshape(lon2d.shape)
+        boundary_mask = mask.reshape(lon2d.shape)
+        pg_masked     = np.where(boundary_mask, pg, np.nan)
+
+        pg_filled = np.where(np.isnan(pg_masked), float(min_rx) - 50.0, pg_masked)
+        ps        = gaussian_filter(pg_filled.astype(float), sigma=0.5)
+        ps        = np.where(boundary_mask, ps, float(min_rx) - 50.0)
+
+        cm = (ps >= min_rx) & boundary_mask
 
         pr_max_actual = float(np.nanmax(pg_masked)) if boundary_mask.any() else float(min_rx)
-        vmin = float(min_rx)
-        vmax = max(pr_max_actual, vmin + 1.0)
+        vmin = float(pr_min) if pr_min is not None else float(min_rx)
+        vmax = float(pr_max) if pr_max is not None else max(pr_max_actual, vmin + 1.0)
 
         cmap = plt.colormaps['jet']
         norm = mc.Normalize(vmin=vmin, vmax=vmax, clip=True)
         rgba = cmap(norm(ps)).astype(float)
         pn   = np.clip((ps - vmin) / (vmax - vmin), 0, 1)
-        rgba[..., 3] = np.where(cm, 0.45 + 0.35*pn, 0.0)
 
-        img = Image.fromarray((rgba[::-1,:,:]*255).astype(np.uint8), 'RGBA')
-        w, h = img.size
-        img  = img.resize((w*2, h*2), Image.BILINEAR)
-        buf  = io.BytesIO()
+        # pr_min 미만 픽셀 투명 처리
+        cm_display = cm & (ps >= vmin)
+        rgba[..., 3] = np.where(cm_display, 0.45 + 0.35 * pn, 0.0)
+
+        img      = Image.fromarray((rgba[::-1, :, :] * 255).astype(np.uint8), 'RGBA')
+        w, h_img = img.size
+        img      = img.resize((w * 2, h_img * 2), Image.BILINEAR)
+        buf      = io.BytesIO()
         img.save(buf, 'PNG', optimize=True)
-        url = f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode()}"
+        url      = f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode()}"
 
+        if cb: cb(f"합성 히트맵 완료 ({len(gws)}개 GW)")
         return {
             'url'     : url,
             'bounds'  : [[latmin, lmin], [latmax, lmax]],
-            'callsign': gw.callsign,
+            'callsign': 'COMBINED',
+            'type'    : 'combined',
             'min_rx'  : min_rx,
             'ps'      : ps,
             'cm'      : cm,
@@ -344,7 +534,6 @@ class CoverageEngine:
         eg = env_grid.reshape(lon2d.shape)
         boundary_mask = mask.reshape(lon2d.shape)
 
-        # 1=Dense Urban(빨강), 2=Urban(주황), 3=Suburban(노랑), 4=Open(초록)
         ENV_COLORS = {
             1: (220, 50,  50,  160),
             2: (230, 140, 30,  140),
@@ -356,7 +545,7 @@ class CoverageEngine:
             where = (eg == code) & boundary_mask
             rgba[where] = color
 
-        img = Image.fromarray(rgba[::-1,:,:], 'RGBA')
+        img = Image.fromarray(rgba[::-1, :, :], 'RGBA')
         w, h = img.size
         img  = img.resize((w*2, h*2), Image.NEAREST)
         buf  = io.BytesIO()

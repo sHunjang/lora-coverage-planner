@@ -118,7 +118,7 @@ class GWOptimizer:
               - 19.21 * np.log10(hb_gw))
         _B = 42.5 - 5.2 * np.log10(hb_gw)
         _log_d = (pl_limit - _A) / _B
-        self._d_max_m = min(10 ** _log_d * 1000.0, 30000.0)  # 최대 30km 캡
+        self._d_max_m = min(10 ** _log_d * 1000.0 * 1.2, 20000.0)  # 최대 30km 캡
 
         # ── 전체 station 간 거리 행렬 사전 계산 (scipy cdist, 빠름) ──
         from scipy.spatial.distance import cdist

@@ -214,7 +214,7 @@ class CoverageSettingsDialog(QDialog):
             {'pr': -100, 'color': '#FF8C00'},
             {'pr': -110, 'color': '#FFD700'},
             {'pr': -120, 'color': '#00C94A'},
-            {'pr': -130, 'color': '#4f8ef7'},
+            # {'pr': -130, 'color': '#4f8ef7'},                             
         ])
         for lv in defaults:
             self._add_color_row(lv['pr'], lv['color'])

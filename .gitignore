@@ -28,3 +28,7 @@ Thumbs.db
 *.log
 
 results/
+
+Heatmap-Pixel_setup.md
+
+*.csv

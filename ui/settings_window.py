@@ -15,7 +15,7 @@ SETTINGS_PATH = os.path.join(
 
 DEFAULT_SETTINGS = {
     "fc_mhz"        : 915.0,
-    "env"           : 0,       # 0=자동(DSM 기반), 1~4=수동
+    "env"           : 0,
     "n_samples"     : 100,
     "diff_order"    : 2,
     "gw_pt_dbm"     : 14.0,
@@ -123,7 +123,7 @@ class SettingsWindow(QDialog):
         super().__init__(parent)
         self.setWindowTitle("설정")
         self.setStyleSheet(STYLE)
-        self.resize(480, 600)
+        self.resize(480, 620)
         self.setWindowFlag(Qt.Window)
         self._settings = load_settings()
         self._build()
@@ -147,10 +147,10 @@ class SettingsWindow(QDialog):
         self.sp_nsamp  = _ispin(20, 500, 100)
         self.sp_dorder = _ispin(1, 3, 2)
 
-        fl1.addRow("반송 주파수",        self.sp_fc)
-        fl1.addRow("전파 환경",          self.cb_env)
-        fl1.addRow("DEM 샘플 수",        self.sp_nsamp)
-        fl1.addRow("Deygout 재귀 깊이",  self.sp_dorder)
+        fl1.addRow("반송 주파수",       self.sp_fc)
+        fl1.addRow("전파 환경",         self.cb_env)
+        fl1.addRow("DEM 샘플 수",       self.sp_nsamp)
+        fl1.addRow("Deygout 재귀 깊이", self.sp_dorder)
 
         note1 = QLabel(
             "· env=Auto: 경로 중간점 DSM 분석으로 자동 분류\n"
@@ -184,13 +184,13 @@ class SettingsWindow(QDialog):
         self.sp_nd_gr     = _dspin(0,    30,   2.15,  2, " dBi")
         self.sp_nd_lr     = _dspin(0,    20,   0.0,   2, " dB")
         self.sp_nd_hm     = _dspin(0.1,  50,   1.5,   1, " m")
-        self.sp_nd_rxm    = _dspin(-160, -50,  -126.6, 1, " dBm")
+        self.sp_nd_rxm    = _dspin(-160, -50, -126.6,  1, " dBm")
         self.sp_nd_indoor = _dspin(0,    30,   0.0,   1, " dB")
 
-        fl3.addRow("수신 이득 Gr",         self.sp_nd_gr)
-        fl3.addRow("수신 손실 Lr",         self.sp_nd_lr)
-        fl3.addRow("안테나 높이 hm",       self.sp_nd_hm)
-        fl3.addRow("최소 수신 레벨",       self.sp_nd_rxm)
+        fl3.addRow("수신 이득 Gr",          self.sp_nd_gr)
+        fl3.addRow("수신 손실 Lr",          self.sp_nd_lr)
+        fl3.addRow("안테나 높이 hm",        self.sp_nd_hm)
+        fl3.addRow("최소 수신 레벨",        self.sp_nd_rxm)
         fl3.addRow("실내 투과 손실 (기본)", self.sp_nd_indoor)
 
         note3 = QLabel(
@@ -204,7 +204,8 @@ class SettingsWindow(QDialog):
         # ── 탭 4: 히트맵 & 지도 ─────────────────────────────
         t4 = QWidget(); fl4 = QFormLayout(t4); fl4.setSpacing(10)
 
-        self.sp_hm_step  = _dspin(0.0005, 0.005, 0.0015, 4, "°", 0.0005)
+        # 소수점 5자리, 최솟값 0.00010, step 0.00005
+        self.sp_hm_step  = _dspin(0.00010, 0.005, 0.0015, 5, "°", 0.00005)
         self.chk_hm_diff = QCheckBox("Deygout 회절 포함 (정확하나 느림)")
         self.cb_tile     = QComboBox()
         for t in MAP_TILES:
@@ -215,9 +216,11 @@ class SettingsWindow(QDialog):
         fl4.addRow("지도 배경",       self.cb_tile)
 
         note4 = QLabel(
-            "· 0.0010° ≈ 111m/격자 (정밀, 느림)\n"
-            "· 0.0015° ≈ 167m/격자 (기본, 빠름)\n"
-            "· 0.0020° ≈ 222m/격자 (빠름, 거침)")
+            "· 0.00018° ≈ 20m/격자  (매우 정밀, 매우 느림)\n"
+            "· 0.00050° ≈ 56m/격자  (정밀, 느림)\n"
+            "· 0.00100° ≈ 111m/격자 (보통, 느림)\n"
+            "· 0.00150° ≈ 167m/격자 (기본, 빠름)\n"
+            "· 0.00200° ≈ 222m/격자 (빠름, 거침)")
         note4.setStyleSheet(f"color:{MUTED};font-size:10px;")
         fl4.addRow("", note4)
         tabs.addTab(t4, "🗺 히트맵/지도")
@@ -265,10 +268,10 @@ class SettingsWindow(QDialog):
         self.sp_gw_lt.setValue(s.get("gw_lt_db",  0.0))
         self.sp_gw_hb.setValue(s.get("gw_hb_m",   15.0))
 
-        self.sp_nd_gr.setValue(s.get("nd_gr_dbi",     2.15))
-        self.sp_nd_lr.setValue(s.get("nd_lr_db",      0.0))
-        self.sp_nd_hm.setValue(s.get("nd_hm_m",       1.5))
-        self.sp_nd_rxm.setValue(s.get("nd_min_rx",   -126.6))
+        self.sp_nd_gr.setValue(s.get("nd_gr_dbi",      2.15))
+        self.sp_nd_lr.setValue(s.get("nd_lr_db",       0.0))
+        self.sp_nd_hm.setValue(s.get("nd_hm_m",        1.5))
+        self.sp_nd_rxm.setValue(s.get("nd_min_rx",    -126.6))
         self.sp_nd_indoor.setValue(s.get("nd_indoor_loss", 0.0))
 
         self.sp_hm_step.setValue(s.get("heatmap_step", 0.0015))

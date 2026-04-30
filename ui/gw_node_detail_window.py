@@ -19,16 +19,12 @@ COLS = ['Callsign', '거리(km)', '방위각(°)', 'Pr(dBm)',
 
 class NumericItem(QTableWidgetItem):
     """숫자 기준 정렬을 지원하는 QTableWidgetItem."""
-    def __init__(self, text: str, sort_val=None):
+    def __init__(self, text: str):
         super().__init__(text)
-        # sort_val이 없으면 텍스트에서 숫자 추출 시도
-        if sort_val is not None:
-            self._val = sort_val
-        else:
-            try:
-                self._val = float(text.replace(',', '').strip())
-            except (ValueError, AttributeError):
-                self._val = text  # 문자열 그대로
+        try:
+            self._val = float(text.replace(',', '').strip())
+        except (ValueError, AttributeError):
+            self._val = text
 
     def __lt__(self, other):
         if isinstance(other, NumericItem):
@@ -38,6 +34,26 @@ class NumericItem(QTableWidgetItem):
                 return str(self._val) < str(other._val)
         return super().__lt__(other)
 
+
+class CallsignItem(QTableWidgetItem):
+    """Callsign 문자열에서 숫자 부분을 추출해 정렬하는 QTableWidgetItem.
+    예: Node1 < Node2 < Node10 < Node100
+    """
+    def __init__(self, text: str):
+        super().__init__(text)
+        import re
+        # 문자열 끝의 숫자 추출 (Node1 → 1, OPT-GW10 → 10)
+        m = re.search(r'(\d+)$', text)
+        self._num = int(m.group(1)) if m else 0
+        self._prefix = text[:m.start()] if m else text
+
+    def __lt__(self, other):
+        if isinstance(other, CallsignItem):
+            # prefix가 같으면 숫자로, 다르면 문자열로 비교
+            if self._prefix == other._prefix:
+                return self._num < other._num
+            return self._prefix < other._prefix
+        return super().__lt__(other)
 
 def haversine(lon1, lat1, lon2, lat2) -> float:
     R = 6371.0
@@ -200,7 +216,9 @@ class GWNodeDetailWindow(QDialog):
             ]
             _num_cols = {1, 2, 3, 5, 6, 7, 8}  # 숫자 정렬 컬럼
             for c, v in enumerate(items):
-                if c in _num_cols:
+                if c == 0:
+                    it = CallsignItem(v)
+                elif c in _num_cols:
                     it = NumericItem(v)
                 else:
                     it = QTableWidgetItem(v)

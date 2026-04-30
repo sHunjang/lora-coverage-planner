@@ -53,12 +53,72 @@ class MapWidget(QWidget):
         self.refresh()
 
     def refresh(self, gws=None, nodes=None, result=None,
-                heatmaps=None, selected_gws=None, map_tile=None):
+                heatmaps=None, selected_gws=None, map_tile=None, measure_pts=None):
 
         c = [(BOUNDS[1] + BOUNDS[3]) / 2, (BOUNDS[0] + BOUNDS[2]) / 2]
         tile = map_tile or "CartoDB Voyager"
         m = folium.Map(location=c, zoom_start=12,
                        tiles=tile, prefer_canvas=True)
+
+        # ── 거리 측정선 표시 ──────────────────────────────────────
+        if measure_pts and len(measure_pts) >= 1:
+            import math
+
+            def _haversine(p1, p2):
+                R = 6371.0
+                la1, lo1 = math.radians(p1[1]), math.radians(p1[0])
+                la2, lo2 = math.radians(p2[1]), math.radians(p2[0])
+                dlat = la2 - la1; dlon = lo2 - lo1
+                a = math.sin(dlat/2)**2 + math.cos(la1)*math.cos(la2)*math.sin(dlon/2)**2
+                return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+
+            # 측정 점 마커
+            for i, (lon, lat) in enumerate(measure_pts):
+                folium.CircleMarker(
+                    location=[lat, lon],
+                    radius=6,
+                    color='#FFD700',
+                    fill=True,
+                    fill_color='#FFD700',
+                    fill_opacity=1.0,
+                    tooltip=f"P{i+1} ({lat:.5f}, {lon:.5f})",
+                ).add_to(m)
+
+            # 측정선 및 거리 레이블
+            for i in range(len(measure_pts) - 1):
+                p1 = measure_pts[i]
+                p2 = measure_pts[i+1]
+                dist = _haversine(p1, p2)
+
+                # 측정선
+                folium.PolyLine(
+                    locations=[[p1[1], p1[0]], [p2[1], p2[0]]],
+                    color='#FFD700',
+                    weight=2.5,
+                    dash_array='8 4',
+                    opacity=0.9,
+                ).add_to(m)
+
+                # 중간 지점 거리 레이블
+                mid_lat = (p1[1] + p2[1]) / 2
+                mid_lon = (p1[0] + p2[0]) / 2
+                folium.Marker(
+                    location=[mid_lat, mid_lon],
+                    icon=folium.DivIcon(
+                        html=f'''<div style="
+                            background:#1e2130cc;
+                            color:#FFD700;
+                            border:1px solid #FFD700;
+                            border-radius:4px;
+                            padding:2px 6px;
+                            font-size:11px;
+                            font-weight:bold;
+                            white-space:nowrap;
+                            ">{dist:.3f} km</div>''',
+                        icon_size=(90, 24),
+                        icon_anchor=(45, 12),
+                    ),
+                ).add_to(m)
 
         # ── 히트맵 ──────────────────────────────────────────
         if heatmaps:
