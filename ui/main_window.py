@@ -36,6 +36,21 @@ QToolButton:checked {{
 """
 
 
+def _calc_contour_segments(lon_ax, lat_ax, pr_m, level):
+    """스레드 안전한 등고선 계산 (non-interactive 백엔드 사용)."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    fig = plt.figure()
+    ax  = fig.add_subplot(111)
+    try:
+        cs = ax.contour(lon_ax, lat_ax, pr_m, levels=[level])
+        return cs.allsegs
+    except Exception:
+        return []
+    finally:
+        plt.close(fig)
+
 class CoverageWorker(QObject):
     sig_done = pyqtSignal(object)   # ← 누락
     sig_err  = pyqtSignal(str)      # ← 누락
@@ -81,7 +96,8 @@ class HeatmapWorker(QObject):
             from scipy.ndimage import label as nd_label
             from core.coverage import CoverageEngine
 
-            eng    = CoverageEngine(self.spatial, self.env, self.fc)
+            eng = CoverageEngine(self.spatial, self.env, self.fc,
+                     settings=self.settings)
             min_rx = self.settings.get('min_rx', -126.6)
             step = float(self.settings.get('heatmap_step', 0.0015))
 
@@ -138,15 +154,11 @@ class HeatmapWorker(QObject):
                             pv = float(lv['pr'])
                             if pv < pr_min_in or pv > pr_max_in:
                                 continue
-                            try:
-                                fig, ax = plt.subplots()
-                                cs = ax.contour(lon_ax, lat_ax, pr_m, levels=[pv])
-                                plt.close(fig)
-                            except Exception:
-                                plt.close('all')
+                            allsegs = _calc_contour_segments(lon_ax, lat_ax, pr_m, pv)
+                            if not allsegs:
                                 continue
                             segs, lpts = [], []
-                            for col_segs in cs.allsegs:
+                            for col_segs in allsegs:
                                 for seg in col_segs:
                                     if len(seg) < 4:
                                         continue
@@ -178,16 +190,11 @@ class HeatmapWorker(QObject):
                             if not (ps[cm] >= sens).any():
                                 continue
                             pr_sf = np.where(cm, ps, np.nan)
-                            try:
-                                fig, ax = plt.subplots()
-                                cs_sf = ax.contour(
-                                    lon_ax, lat_ax, pr_sf, levels=[sens])
-                                plt.close(fig)
-                            except Exception:
-                                plt.close('all')
+                            allsegs_sf = _calc_contour_segments(lon_ax, lat_ax, pr_sf, sens)
+                            if not allsegs_sf:
                                 continue
                             segs_sf = []
-                            for col_segs in cs_sf.allsegs:
+                            for col_segs in allsegs_sf:
                                 for seg in col_segs:
                                     if len(seg) < 4:
                                         continue
@@ -244,16 +251,11 @@ class HeatmapWorker(QObject):
                                 pv = float(lv['pr'])
                                 if pv < pr_min_in or pv > pr_max_in:
                                     continue
-                                try:
-                                    fig, ax = plt.subplots()
-                                    cs = ax.contour(
-                                        lon_ax, lat_ax, pr_m, levels=[pv])
-                                    plt.close(fig)
-                                except Exception:
-                                    plt.close('all')
+                                allsegs = _calc_contour_segments(lon_ax, lat_ax, pr_m, pv)
+                                if not allsegs:
                                     continue
                                 segs, lpts = [], []
-                                for col_segs in cs.allsegs:
+                                for col_segs in allsegs:
                                     for seg in col_segs:
                                         if len(seg) < 4:
                                             continue
@@ -283,17 +285,12 @@ class HeatmapWorker(QObject):
                             for sf, sens in SF_SENS.items():
                                 if not (ps[cm] >= sens).any():
                                     continue
-                                pr_sf = np.where(cm, ps, np.nan)
-                                try:
-                                    fig, ax = plt.subplots()
-                                    cs_sf = ax.contour(
-                                        lon_ax, lat_ax, pr_sf, levels=[sens])
-                                    plt.close(fig)
-                                except Exception:
-                                    plt.close('all')
+                                pr_sf = np.where(cm, ps, np.nan)  # ← 여기서 pr_sf 정의
+                                allsegs_sf = _calc_contour_segments(lon_ax, lat_ax, pr_sf, sens)
+                                if not allsegs_sf:
                                     continue
                                 segs_sf = []
-                                for col_segs in cs_sf.allsegs:
+                                for col_segs in allsegs_sf:
                                     for seg in col_segs:
                                         if len(seg) < 4:
                                             continue
