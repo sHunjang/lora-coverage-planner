@@ -82,7 +82,7 @@ class HeatmapWorker(QObject):
             from scipy.ndimage import label as nd_label
             from core.coverage import CoverageEngine
 
-            eng    = CoverageEngine(self.spatial, self.env, self.fc)
+            eng    = CoverageEngine(self.spatial, self.env, self.fc, settings=self.settings)
             min_rx = self.settings.get('min_rx', -126.6)
             step = float(self.settings.get('heatmap_step', 0.0015))
 
@@ -411,7 +411,7 @@ class MainWindow(QMainWindow):
         self.map_w.sig_map_clicked.connect(self._on_map_clicked)
         self.map_w.sig_gw_dragged.connect(self._on_gw_dragged)
         self.map_w.sig_nd_dragged.connect(self._on_nd_dragged)
-        # self.map_w.sig_map_right_clicked.connect(self._on_map_right_clicked)
+        self.map_w.sig_map_right_clicked.connect(self._on_map_right_clicked)
 
     # ── 창 열기 ─────────────────────────────────────────────
 
@@ -460,24 +460,31 @@ class MainWindow(QMainWindow):
 
     def _open_legend(self):
         from ui.legend_window import LegendWindow, DEFAULT_LEVELS
-
-        if self._legend_win is None:
-            levels = self._legend_levels or DEFAULT_LEVELS
-            self._legend_win = LegendWindow(levels=levels, parent=self)
-            self._legend_win.sig_levels_changed.connect(
-                self._on_legend_changed)
+        levels = self._legend_levels or DEFAULT_LEVELS
+        self._legend_win = LegendWindow(levels=levels, parent=self)
+        self._legend_win.sig_levels_changed.connect(self._on_legend_changed)
         self._legend_win.show()
         self._legend_win.raise_()
 
-    def _on_legend_changed(self, s: dict):
-        self._settings['pr_min']       = s.get('pr_min', -120)
-        self._settings['pr_max']       = s.get('pr_max', -60)
-        self._settings['color_levels'] = s.get('color_levels', [])
+    def _on_legend_changed(self, levels: list):
+        self._legend_levels = levels
+        self._settings['color_levels'] = levels
+        if levels:
+            self._settings['pr_min'] = min(lv['pr'] for lv in levels)
+            self._settings['pr_max'] = max(lv['pr'] for lv in levels)
+
+        # 히트맵 표시 중이면 즉시 재계산
+        if self._heatmaps and self._gw_win:
+            gws = [g for g in self._gw_win.get_gws() if g.enabled]
+            if gws:
+                self.status.showMessage("범례 변경 — 히트맵 재계산 중...")
+                # gw_list_window settings 대신 _settings 직접 전달
+                self._run_heatmap(gws, {})
+                return
+
         self.status.showMessage(
-            f"범례 업데이트 — "
-            f"색상범위: {s['pr_min']}~{s['pr_max']}dBm | "
-            f"등고선: {len(s['color_levels'])}개 | "
-            f"히트맵 재계산 시 반영")
+            f"범례 업데이트 완료 — {len(levels)}개 레벨 | "
+            f"히트맵 재계산 시 반영됩니다.")
 
     # ── 커버리지 분석 ────────────────────────────────────────
     def _run_coverage(self, gws):
@@ -593,54 +600,72 @@ class MainWindow(QMainWindow):
 
     # ── 우클릭 컨텍스트 메뉴 ─────────────────────────────────
 
-    # def _on_map_right_clicked(self, lon: float, lat: float):
-    #     from PyQt5.QtWidgets import QMenu
-    #     from core.coverage import GWEntry, NodeEntry
+    def _on_map_right_clicked(self, lon: float, lat: float):
+        from PyQt5.QtWidgets import QMenu
+        from core.coverage import GWEntry, NodeEntry
 
-    #     menu = QMenu(self)
-    #     menu.setStyleSheet("""
-    #         QMenu {
-    #             background:#1e2130; color:#e0e4ef;
-    #             border:1px solid #2a2f3b; border-radius:6px;
-    #             padding:4px;
-    #         }
-    #         QMenu::item { padding:6px 20px; border-radius:4px; }
-    #         QMenu::item:selected { background:#253a5a; color:#7ab8e8; }
-    #         QMenu::separator { height:1px; background:#2a2f3b; margin:4px 8px; }
-    #     """)
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background:#1e2130; color:#e0e4ef;
+                border:1px solid #2a2f3b; border-radius:6px;
+                padding:4px;
+            }
+            QMenu::item { padding:6px 20px; border-radius:4px; }
+            QMenu::item:selected { background:#253a5a; color:#7ab8e8; }
+            QMenu::separator { height:1px; background:#2a2f3b; margin:4px 8px; }
+        """)
 
-    #     lbl = menu.addAction(f"📍 ({lat:.5f}, {lon:.5f})")
-    #     lbl.setEnabled(False)
-    #     menu.addSeparator()
-    #     act_gw   = menu.addAction("📡  이 위치에 GW 추가")
-    #     act_node = menu.addAction("📶  이 위치에 단말기 추가")
+        lbl = menu.addAction(f"📍 ({lat:.5f}, {lon:.5f})")
+        lbl.setEnabled(False)
+        menu.addSeparator()
+        act_gw   = menu.addAction("📡  이 위치에 GW 추가")
+        act_node = menu.addAction("📶  이 위치에 단말기 추가")
 
-    #     action = menu.exec_(QCursor.pos())
+        action = menu.exec_(QCursor.pos())
 
-    #     if action == act_gw:
-    #         if self._gw_win is None:
-    #             self._gw_win = GWListWindow(self)
-    #             self._gw_win.sig_coverage_requested.connect(self._run_heatmap)
-    #             self._gw_win.sig_coverage_clear.connect(self._clear_heatmap)
-    #             self._gw_win.sig_coverage_analyze.connect(self._run_coverage)
-    #             self._gw_win.sig_map_refresh.connect(self._refresh_map)
-    #         n  = len(self._gw_win._gws) + 1
-    #         gw = GWEntry(callsign=f"GW{n}", lon=lon, lat=lat)
-    #         self._gw_win._gws.append(gw)
-    #         self._gw_win._refresh_table(suppress_map=True)
-    #         self._refresh_map()
-    #         self.status.showMessage(f"GW{n} 추가 → ({lat:.5f}, {lon:.5f})")
+        if action == act_gw:
+            if self._gw_win is None:
+                self._gw_win = GWListWindow(self)
+                self._gw_win.sig_coverage_requested.connect(self._run_heatmap)
+                self._gw_win.sig_coverage_clear.connect(self._clear_heatmap)
+                self._gw_win.sig_coverage_analyze.connect(self._run_coverage)
+                self._gw_win.sig_map_refresh.connect(self._refresh_map)
+                self._gw_win.sig_env_map_requested.connect(self._run_env_map)
+            s  = self._settings
+            n  = len(self._gw_win._gws) + 1
+            gw = GWEntry(
+                callsign = f"GW{n}",
+                lon      = lon, lat = lat,
+                pt_dbm   = s.get('gw_pt_dbm', 14.0),
+                gt_dbi   = s.get('gw_gt_dbi', 2.15),
+                lt_db    = s.get('gw_lt_db',  0.0),
+                hb_m     = s.get('gw_hb_m',   15.0),
+            )
+            self._gw_win._gws.append(gw)
+            self._gw_win._refresh_table(suppress_map=True)
+            self._refresh_map()
+            self.status.showMessage(f"GW{n} 추가 → ({lat:.5f}, {lon:.5f})")
 
-    #     elif action == act_node:
-    #         if self._node_win is None:
-    #             self._node_win = NodeListWindow(self)
-    #             self._node_win.sig_map_refresh.connect(self._refresh_map)
-    #         n  = len(self._node_win._nodes) + 1
-    #         nd = NodeEntry(callsign=f"Node{n}", lon=lon, lat=lat)
-    #         self._node_win._nodes.append(nd)
-    #         self._node_win._refresh_table(suppress_map=True)
-    #         self._refresh_map()
-    #         self.status.showMessage(f"Node{n} 추가 → ({lat:.5f}, {lon:.5f})")
+        elif action == act_node:
+            if self._node_win is None:
+                self._node_win = NodeListWindow(self)
+                self._node_win.sig_map_refresh.connect(self._refresh_map)
+            s  = self._settings
+            n  = len(self._node_win._nodes) + 1
+            nd = NodeEntry(
+                callsign       = f"Node{n}",
+                lon            = lon, lat = lat,
+                gr_dbi         = s.get('nd_gr_dbi', 2.15),
+                lr_db          = s.get('nd_lr_db',  0.0),
+                hm_m           = s.get('nd_hm_m',   1.5),
+                min_rx_dbm     = s.get('nd_min_rx', -126.6),
+                indoor_loss_db = s.get('nd_indoor_loss', 0.0),
+            )
+            self._node_win._nodes.append(nd)
+            self._node_win._refresh_table(suppress_map=True)
+            self._refresh_map()
+            self.status.showMessage(f"Node{n} 추가 → ({lat:.5f}, {lon:.5f})")
 
     # ── 히트맵 ──────────────────────────────────────────────
 
@@ -662,10 +687,13 @@ class MainWindow(QMainWindow):
         if self.spatial is None:
             self.status.showMessage("공간 데이터 로드 중..."); return
 
-        # 현재 범례 레벨을 settings에 병합
-        merged = dict(settings)
+        merged = dict(self._settings)   # ← settings 파라미터 대신 _settings 기준으로
+        merged.update(settings)         # ← gw_list_window settings로 덮어쓰되
+        # color_levels는 항상 _settings 기준 (범례 설정값 우선)
         if self._legend_levels:
             merged['color_levels'] = self._legend_levels
+        if 'color_levels' in self._settings:
+            merged['color_levels'] = self._settings['color_levels']
 
         self.status.showMessage(
             f"히트맵 계산 중: {', '.join(g.callsign for g in gws)}")

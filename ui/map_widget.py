@@ -11,12 +11,17 @@ BOUNDS = (127.02772, 37.33338, 127.19584, 37.47482)
 
 class MapBridge(QObject):
     clicked    = pyqtSignal(float, float)
+    right_clicked = pyqtSignal(float, float)
     gw_dragged = pyqtSignal(str, float, float)
     nd_dragged = pyqtSignal(str, float, float)
 
     @pyqtSlot(float, float)
     def mapClicked(self, lon, lat):
         self.clicked.emit(lon, lat)
+
+    @pyqtSlot(float, float)
+    def mapRightClicked(self, lon, lat):
+        self.right_clicked.emit(lon, lat)
 
     @pyqtSlot(str, float, float)
     def gwDragged(self, callsign, lon, lat):
@@ -29,6 +34,7 @@ class MapBridge(QObject):
 
 class MapWidget(QWidget):
     sig_map_clicked = pyqtSignal(float, float)
+    sig_map_right_clicked = pyqtSignal(float, float)
     sig_gw_dragged  = pyqtSignal(str, float, float)
     sig_nd_dragged  = pyqtSignal(str, float, float)
 
@@ -47,6 +53,7 @@ class MapWidget(QWidget):
         self.channel.registerObject("bridge", self.bridge)
         self.view.page().setWebChannel(self.channel)
         self.bridge.clicked.connect(self.sig_map_clicked)
+        self.bridge.right_clicked.connect(self.sig_map_right_clicked)
         self.bridge.gw_dragged.connect(self.sig_gw_dragged)
         self.bridge.nd_dragged.connect(self.sig_nd_dragged)
 
@@ -254,6 +261,7 @@ new QWebChannel(qt.webChannelTransport, function(ch){
     _bridge = ch.objects.bridge;
 });
 </script>"""))
+        
         m.get_root().script.add_child(folium.Element(f"""
 (function waitMap(){{
     var mapObj = window['{map_name}'];
@@ -261,6 +269,12 @@ new QWebChannel(qt.webChannelTransport, function(ch){
 
     mapObj.on('click', function(e){{
         if(_bridge) _bridge.mapClicked(e.latlng.lng, e.latlng.lat);
+    }});
+
+    mapObj.on('contextmenu', function(e){{
+        L.DomEvent.preventDefault(e);
+        L.DomEvent.stopPropagation(e);
+        if(_bridge) _bridge.mapRightClicked(e.latlng.lng, e.latlng.lat);
     }});
 
     mapObj.eachLayer(function(layer){{
