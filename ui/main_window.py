@@ -36,24 +36,9 @@ QToolButton:checked {{
 """
 
 
-def _calc_contour_segments(lon_ax, lat_ax, pr_m, level):
-    """스레드 안전한 등고선 계산 (non-interactive 백엔드 사용)."""
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
-    fig = plt.figure()
-    ax  = fig.add_subplot(111)
-    try:
-        cs = ax.contour(lon_ax, lat_ax, pr_m, levels=[level])
-        return cs.allsegs
-    except Exception:
-        return []
-    finally:
-        plt.close(fig)
-
 class CoverageWorker(QObject):
-    sig_done = pyqtSignal(object)   # ← 누락
-    sig_err  = pyqtSignal(str)      # ← 누락
+    sig_done = pyqtSignal(object)
+    sig_err  = pyqtSignal(str)
 
     def __init__(self, spatial, gws, nodes, settings=None):
         super().__init__()
@@ -69,7 +54,8 @@ class CoverageWorker(QObject):
             fc   = self.settings.get('fc_mhz', 915.0)
             nsmp = self.settings.get('n_samples', 100)
             eng    = CoverageEngine(self.spatial, env=env,
-                                    fc=fc, n_samples=nsmp)
+                                    fc=fc, n_samples=nsmp,
+                                    settings=self.settings)
             result = eng.run(self.gws, self.nodes)
             self.sig_done.emit(result)
         except Exception:
@@ -96,8 +82,7 @@ class HeatmapWorker(QObject):
             from scipy.ndimage import label as nd_label
             from core.coverage import CoverageEngine
 
-            eng = CoverageEngine(self.spatial, self.env, self.fc,
-                     settings=self.settings)
+            eng    = CoverageEngine(self.spatial, self.env, self.fc)
             min_rx = self.settings.get('min_rx', -126.6)
             step = float(self.settings.get('heatmap_step', 0.0015))
 
@@ -123,11 +108,11 @@ class HeatmapWorker(QObject):
                 # ── 여러 GW → 합성 히트맵 (최대 Pr 기준) ────────────
                 self.sig_log.emit(
                     f"{len(self.gws)}개 GW 합성 히트맵 계산 중...")
-                pr_min = min((lv['pr'] for lv in color_levels), default=None)
                 hm = eng.heatmap_combined(
                     self.gws, min_rx, step=step,
                     cb=self.sig_log.emit,
-                    pr_min=pr_min)
+                    pr_min=self.settings.get('pr_min'),
+                    pr_max=self.settings.get('pr_max'))
 
                 # 등고선 계산
                 ps  = hm.get('ps')
@@ -154,11 +139,15 @@ class HeatmapWorker(QObject):
                             pv = float(lv['pr'])
                             if pv < pr_min_in or pv > pr_max_in:
                                 continue
-                            allsegs = _calc_contour_segments(lon_ax, lat_ax, pr_m, pv)
-                            if not allsegs:
+                            try:
+                                fig, ax = plt.subplots()
+                                cs = ax.contour(lon_ax, lat_ax, pr_m, levels=[pv])
+                                plt.close(fig)
+                            except Exception:
+                                plt.close('all')
                                 continue
                             segs, lpts = [], []
-                            for col_segs in allsegs:
+                            for col_segs in cs.allsegs:
                                 for seg in col_segs:
                                     if len(seg) < 4:
                                         continue
@@ -190,11 +179,16 @@ class HeatmapWorker(QObject):
                             if not (ps[cm] >= sens).any():
                                 continue
                             pr_sf = np.where(cm, ps, np.nan)
-                            allsegs_sf = _calc_contour_segments(lon_ax, lat_ax, pr_sf, sens)
-                            if not allsegs_sf:
+                            try:
+                                fig, ax = plt.subplots()
+                                cs_sf = ax.contour(
+                                    lon_ax, lat_ax, pr_sf, levels=[sens])
+                                plt.close(fig)
+                            except Exception:
+                                plt.close('all')
                                 continue
                             segs_sf = []
-                            for col_segs in allsegs_sf:
+                            for col_segs in cs_sf.allsegs:
                                 for seg in col_segs:
                                     if len(seg) < 4:
                                         continue
@@ -222,10 +216,10 @@ class HeatmapWorker(QObject):
                 for gw in self.gws:
                     self.sig_log.emit(f"{gw.callsign} 히트맵 계산 중...")
                     use_deygout = self.settings.get('heatmap_diff', False)
-                    pr_min = min((lv['pr'] for lv in color_levels), default=None)
                     hm = eng.heatmap(gw, min_rx, step=step,
                                     cb=self.sig_log.emit,
-                                    pr_min=pr_min)
+                                    pr_min=self.settings.get('pr_min'),
+                                    pr_max=self.settings.get('pr_max'))
 
                     ps = hm.get('ps')
                     cm = hm.get('cm')
@@ -251,11 +245,16 @@ class HeatmapWorker(QObject):
                                 pv = float(lv['pr'])
                                 if pv < pr_min_in or pv > pr_max_in:
                                     continue
-                                allsegs = _calc_contour_segments(lon_ax, lat_ax, pr_m, pv)
-                                if not allsegs:
+                                try:
+                                    fig, ax = plt.subplots()
+                                    cs = ax.contour(
+                                        lon_ax, lat_ax, pr_m, levels=[pv])
+                                    plt.close(fig)
+                                except Exception:
+                                    plt.close('all')
                                     continue
                                 segs, lpts = [], []
-                                for col_segs in allsegs:
+                                for col_segs in cs.allsegs:
                                     for seg in col_segs:
                                         if len(seg) < 4:
                                             continue
@@ -285,12 +284,17 @@ class HeatmapWorker(QObject):
                             for sf, sens in SF_SENS.items():
                                 if not (ps[cm] >= sens).any():
                                     continue
-                                pr_sf = np.where(cm, ps, np.nan)  # ← 여기서 pr_sf 정의
-                                allsegs_sf = _calc_contour_segments(lon_ax, lat_ax, pr_sf, sens)
-                                if not allsegs_sf:
+                                pr_sf = np.where(cm, ps, np.nan)
+                                try:
+                                    fig, ax = plt.subplots()
+                                    cs_sf = ax.contour(
+                                        lon_ax, lat_ax, pr_sf, levels=[sens])
+                                    plt.close(fig)
+                                except Exception:
+                                    plt.close('all')
                                     continue
                                 segs_sf = []
-                                for col_segs in allsegs_sf:
+                                for col_segs in cs_sf.allsegs:
                                     for seg in col_segs:
                                         if len(seg) < 4:
                                             continue
@@ -456,22 +460,26 @@ class MainWindow(QMainWindow):
 
     def _open_legend(self):
         from ui.legend_window import LegendWindow, DEFAULT_LEVELS
-        # 매번 현재 레벨로 새로 생성
-        levels = self._legend_levels or DEFAULT_LEVELS
-        self._legend_win = LegendWindow(levels=levels, parent=self)
-        self._legend_win.sig_levels_changed.connect(self._on_legend_changed)
+
+        if self._legend_win is None:
+            levels = self._legend_levels or DEFAULT_LEVELS
+            self._legend_win = LegendWindow(levels=levels, parent=self)
+            self._legend_win.sig_levels_changed.connect(
+                self._on_legend_changed)
         self._legend_win.show()
         self._legend_win.raise_()
 
-    def _on_legend_changed(self, levels: list):
-        self._legend_levels = levels
-        self._settings['color_levels'] = levels
+    def _on_legend_changed(self, s: dict):
+        self._settings['pr_min']       = s.get('pr_min', -120)
+        self._settings['pr_max']       = s.get('pr_max', -60)
+        self._settings['color_levels'] = s.get('color_levels', [])
         self.status.showMessage(
-            f"범례 업데이트 완료 — {len(levels)}개 레벨 | "
-            f"히트맵을 다시 계산하면 반영됩니다.")
+            f"범례 업데이트 — "
+            f"색상범위: {s['pr_min']}~{s['pr_max']}dBm | "
+            f"등고선: {len(s['color_levels'])}개 | "
+            f"히트맵 재계산 시 반영")
 
     # ── 커버리지 분석 ────────────────────────────────────────
-
     def _run_coverage(self, gws):
         if self.spatial is None:
             self.status.showMessage("공간 데이터 로드 중..."); return
@@ -479,7 +487,6 @@ class MainWindow(QMainWindow):
         if not nodes:
             self.status.showMessage("단말기를 먼저 추가하세요."); return
 
-        # 이전 스레드 종료 후 재시작
         if self._cov_thread and self._cov_thread.isRunning():
             self._cov_thread.quit()
             self._cov_thread.wait(2000)
@@ -492,6 +499,8 @@ class MainWindow(QMainWindow):
         w.moveToThread(t)
         t.started.connect(w.run)
         w.sig_done.connect(self._on_coverage_done)
+        w.sig_done.connect(t.quit)   # ← 추가
+        w.sig_err.connect(t.quit)    # ← 추가
         w.sig_err.connect(lambda m: print(f"[COV ERR] {m}"))
         self._cov_worker = w
         self._cov_thread = t
@@ -508,6 +517,11 @@ class MainWindow(QMainWindow):
             heatmaps=self._heatmaps,
             selected_gws=sel)
         self.result_panel.update_result(result, gws)
+
+        # ── 추가: Node 목록 창 갱신 ──────────────────────────
+        if self._node_win:
+            self._node_win.update_result(result)
+
         pct = result.coverage_pct
         self.lbl.setText(
             f"커버리지: {result.n_covered}/{result.n_total} ({pct:.1f}%)")

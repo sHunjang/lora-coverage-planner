@@ -13,7 +13,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from core.coverage import NodeEntry
 from ui.dialogs import NodeParamDialog, DARK, PANEL, TEXT, MUTED, BORDER, STYLE_DLG
 
-COLS = ['Callsign', '경도', '위도', 'Gr(dBi)', 'Lr(dB)', '높이(m)', '최소수신(dBm)']
+COLS = ['Callsign', '경도', '위도', 'Gr(dBi)', 'Lr(dB)', '높이(m)', '최소수신(dBm)', '연결 GW', '수신전력(dBm)', '상태']
 
 BTN = ("QPushButton{background:#1c2a3a;color:#7ab8e8;"
        "border:1px solid #2a4a6a;border-radius:4px;"
@@ -106,9 +106,10 @@ class NodeListWindow(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Node(단말) 목록")
         self.setStyleSheet(STYLE_DLG)
-        self.resize(860, 480)
+        self.resize(1100, 480)
         self.setWindowFlag(Qt.Window)
         self._nodes: list[NodeEntry] = []
+        self._result = None
         self._build()
 
     def _build(self):
@@ -120,13 +121,13 @@ class NodeListWindow(QDialog):
         self.btn_add  = QPushButton("+ Node 추가");    self.btn_add.setStyleSheet(BTN_GREEN)
         self.btn_del  = QPushButton("- 선택 삭제");    self.btn_del.setStyleSheet(BTN_RED)
         self.btn_rnd  = QPushButton("🎲 랜덤 배치");   self.btn_rnd.setStyleSheet(BTN_PURPLE)
-        self.btn_clr  = QPushButton("✕ 전체 삭제");    self.btn_clr.setStyleSheet(BTN_RED)
         self.btn_detail = QPushButton("📋 연결 GW 보기"); self.btn_detail.setStyleSheet(BTN)
         self.btn_imp  = QPushButton("CSV 가져오기");    self.btn_imp.setStyleSheet(BTN)
         self.btn_exp  = QPushButton("CSV 내보내기");    self.btn_exp.setStyleSheet(BTN)
+        self.btn_clr_all  = QPushButton("✕ 전체 삭제");    self.btn_clr_all.setStyleSheet(BTN_RED)
 
         for b in [self.btn_add, self.btn_del, self.btn_rnd,
-                  self.btn_clr, self.btn_detail, self.btn_imp, self.btn_exp]:
+                  self.btn_detail, self.btn_imp, self.btn_exp, self.btn_clr_all]:
             top.addWidget(b)
         top.addStretch()
         lay.addLayout(top)
@@ -158,24 +159,84 @@ class NodeListWindow(QDialog):
         self.btn_add.clicked.connect(self._add_default)
         self.btn_del.clicked.connect(self._del_selected)
         self.btn_rnd.clicked.connect(self._random_place)
-        self.btn_clr.clicked.connect(self._clear_all)
         self.btn_detail.clicked.connect(self._open_detail)
         self.btn_imp.clicked.connect(self._import_csv)
         self.btn_exp.clicked.connect(self._export_csv)
+        self.btn_clr_all.clicked.connect(self._clear_all)
 
     def _refresh_table(self, suppress_map=False):
         self.tbl.setRowCount(0)
-        for nd in self._nodes:
-            r = self.tbl.rowCount(); self.tbl.insertRow(r)
-            for c, v in enumerate([
-                nd.callsign, f"{nd.lon:.6f}", f"{nd.lat:.6f}",
-                f"{nd.gr_dbi:.2f}", f"{nd.lr_db:.2f}",
-                f"{nd.hm_m:.1f}", f"{nd.min_rx_dbm:.1f}",
-            ]):
-                self.tbl.setItem(r, c, QTableWidgetItem(str(v)))
+        for ni, nd in enumerate(self._nodes):
+            r = self.tbl.rowCount()
+            self.tbl.insertRow(r)
+
+            # 커버리지 결과에서 연결 GW / 수신전력 / 상태 추출
+            best_gw = "─"
+            best_pr = "─"
+            status  = "─"
+            status_color = None
+
+            if self._result and ni < len(self._result.nodes):
+                info = self._result.nodes[ni]
+                if info.best_gw:
+                    best_gw = info.best_gw
+                if info.best_pr > -999:
+                    best_pr = f"{info.best_pr:.1f}"
+                if info.covered:
+                    status = "✓ 커버"
+                    status_color = "#00C94A"
+                else:
+                    status = "✗ 미커버"
+                    status_color = "#FF4444"
+
+            values = [
+                nd.callsign,
+                f"{nd.lon:.6f}",
+                f"{nd.lat:.6f}",
+                f"{nd.gr_dbi:.2f}",
+                f"{nd.lr_db:.2f}",
+                f"{nd.hm_m:.1f}",
+                f"{nd.min_rx_dbm:.1f}",
+                best_gw,
+                best_pr,
+                status,
+            ]
+
+            for c, v in enumerate(values):
+                it = QTableWidgetItem(str(v))
+                it.setTextAlignment(Qt.AlignCenter)
+                self.tbl.setItem(r, c, it)
+
+            # 상태 컬럼 색상
+            if status_color:
+                from PyQt5.QtGui import QColor
+                self.tbl.item(r, 9).setForeground(QColor(status_color))
+                if info.covered:
+                    self.tbl.item(r, 9).setBackground(QColor("#0d2010"))
+                else:
+                    self.tbl.item(r, 9).setBackground(QColor("#200d0d"))
+
+            # 수신전력 색상
+            if self._result and ni < len(self._result.nodes):
+                info = self._result.nodes[ni]
+                if info.best_pr > -999:
+                    if info.best_pr >= -110:
+                        pr_col = "#00C94A"
+                    elif info.best_pr >= nd.min_rx_dbm:
+                        pr_col = "#FFD700"
+                    else:
+                        pr_col = "#FF4444"
+                    from PyQt5.QtGui import QColor
+                    self.tbl.item(r, 8).setForeground(QColor(pr_col))
+
         self.lbl_count.setText(f"Node: {len(self._nodes)}개")
         if not suppress_map:
             self.sig_map_refresh.emit()
+
+    def update_result(self, result):
+        """커버리지 분석 결과 반영 — 테이블 갱신."""
+        self._result = result
+        self._refresh_table(suppress_map=True)
 
     def add_node(self, nd: NodeEntry):
         self._nodes.append(nd)

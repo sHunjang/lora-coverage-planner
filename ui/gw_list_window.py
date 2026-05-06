@@ -74,10 +74,11 @@ class GWListWindow(QDialog):
         self.btn_imp  = QPushButton("CSV 가져오기");      self.btn_imp.setStyleSheet(BTN)
         self.btn_exp  = QPushButton("CSV 내보내기");      self.btn_exp.setStyleSheet(BTN)
         self.btn_env = QPushButton("🌍 환경 분류 지도"); self.btn_env.setStyleSheet(BTN)
+        self.btn_clr_all = QPushButton("✕ 전체 삭제");   self.btn_clr_all.setStyleSheet(BTN_RED)
 
         for b in [self.btn_add, self.btn_del, self.btn_cov, self.btn_detail,
                   self.btn_anl, self.btn_clr, self.btn_prof, self.btn_dist,
-                  self.btn_lnk, self.btn_cfg, self.btn_imp, self.btn_exp, self.btn_env]:
+                  self.btn_lnk, self.btn_cfg, self.btn_imp, self.btn_exp, self.btn_env, self.btn_clr_all]:
             top.addWidget(b)
         top.addStretch()
         lay.addLayout(top)
@@ -115,6 +116,7 @@ class GWListWindow(QDialog):
         self.btn_imp.clicked.connect(self._import_csv)
         self.btn_exp.clicked.connect(self._export_csv)
         self.btn_env.clicked.connect(self._show_env_map)
+        self.btn_clr_all.clicked.connect(self._clear_all)
 
     def _refresh_table(self, suppress_map=False):
         self.tbl.setRowCount(0)
@@ -178,6 +180,18 @@ class GWListWindow(QDialog):
             if r < len(self._gws):
                 self._gws.pop(r)
         self._refresh_table()
+
+    def _clear_all(self):
+        if not self._gws:
+            return
+        from PyQt5.QtWidgets import QMessageBox
+        ret = QMessageBox.question(
+            self, "전체 삭제",
+            f"GW {len(self._gws)}개를 모두 삭제하시겠습니까?",
+            QMessageBox.Yes | QMessageBox.No)
+        if ret == QMessageBox.Yes:
+            self._gws.clear()
+            self._refresh_table()
 
     def _on_double_click(self, idx):
         r = idx.row()
