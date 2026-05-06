@@ -427,8 +427,22 @@ class NodeListWindow(QDialog):
         if not path: return
         with open(path, 'w', newline='', encoding='utf-8-sig') as f:
             w = csv.writer(f)
-            w.writerow(['callsign', 'lon', 'lat', 'gr_dbi',
-                        'lr_db', 'hm_m', 'min_rx_dbm', 'indoor_loss_db'])
-            for n in self._nodes:
-                w.writerow([n.callsign, n.lon, n.lat,
-                            n.gr_dbi, n.lr_db, n.hm_m, n.min_rx_dbm, n.indoor_loss_db])
+            w.writerow(['callsign', 'lon', 'lat', 'gr_dbi', 'lr_db',
+                        'hm_m', 'min_rx_dbm', 'indoor_loss_db',
+                        '연결 GW', '수신전력(dBm)', '상태'])
+            for ni, n in enumerate(self._nodes):
+                best_gw = ""
+                best_pr = ""
+                status  = ""
+                if self._result and ni < len(self._result.nodes):
+                    info    = self._result.nodes[ni]
+                    best_gw = info.best_gw or ""
+                    best_pr = f"{info.best_pr:.1f}" if info.best_pr > -999 else ""
+                    status  = "커버" if info.covered else "미커버"
+                w.writerow([
+                    n.callsign, n.lon, n.lat,
+                    n.gr_dbi, n.lr_db, n.hm_m,
+                    n.min_rx_dbm,
+                    getattr(n, 'indoor_loss_db', 0.0),
+                    best_gw, best_pr, status,
+                ])

@@ -186,31 +186,43 @@ class MapWidget(QWidget):
 
         # ── Node 마커 ────────────────────────────────────────
         if nodes:
-            nd_lyr = folium.FeatureGroup(name="Nodes", show=True)
-            for ni, nd in enumerate(nodes):
-                if result and ni < len(result.nodes):
-                    info = result.nodes[ni]
-                    cov  = info.covered
-                    pr   = info.best_pr
-                    tip  = (f"{nd.callsign} | "
-                            f"{'✓ 커버' if cov else '✗ 미커버'} | "
-                            f"최대 Pr={pr:.1f}dBm")
-                    marker_color = 'green' if cov else 'red'
-                else:
-                    marker_color = 'blue'
-                    tip = nd.callsign
-                folium.Marker(
-                    location=[nd.lat, nd.lon],
-                    tooltip=tip,
-                    icon=folium.Icon(
-                        color=marker_color,
-                        icon_color='white',
-                        icon='mobile',
-                        prefix='fa',
-                    ),
-                    draggable=True,
-                ).add_to(nd_lyr)
-            nd_lyr.add_to(m)
+                    nd_lyr = folium.FeatureGroup(name="Nodes", show=True)
+                    for ni, nd in enumerate(nodes):
+                        if result and ni < len(result.nodes):
+                            info = result.nodes[ni]
+                            cov  = info.covered
+                            pr   = info.best_pr
+                            tip  = (f"{nd.callsign} | "
+                                    f"{'✓ 커버' if cov else '✗ 미커버'} | "
+                                    f"최대 Pr={pr:.1f}dBm")
+                            # Pr 값 기준으로 색상 결정
+                            if not cov:
+                                marker_color = 'gray'
+                            elif pr >= -90:
+                                marker_color = 'red'       # -90dBm 이상 → 빨강
+                            elif pr >= -100:
+                                marker_color = 'orange'    # -100dBm 이상 → 주황
+                            elif pr >= -110:
+                                marker_color = 'beige'     # -110dBm 이상 → 노랑
+                            elif pr >= -120:
+                                marker_color = 'green'     # -120dBm 이상 → 초록
+                            else:
+                                marker_color = 'blue'      # -120dBm 미만 → 파랑
+                        else:
+                            marker_color = 'gray'
+                            tip = nd.callsign
+                        folium.Marker(
+                            location=[nd.lat, nd.lon],
+                            tooltip=tip,
+                            icon=folium.Icon(
+                                color=marker_color,
+                                icon_color='white',
+                                icon='mobile',
+                                prefix='fa',
+                            ),
+                            draggable=True,
+                        ).add_to(nd_lyr)
+                    nd_lyr.add_to(m)
 
         # ── GW 마커 ──────────────────────────────────────────
         if gws:
@@ -242,7 +254,7 @@ class MapWidget(QWidget):
                     icon=folium.Icon(
                         color=marker_color,
                         icon_color=icon_color,
-                        icon='signal',
+                        icon='broadcast-tower',
                         prefix='fa',
                     ),
                     draggable=True,

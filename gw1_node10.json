@@ -1,0 +1,215 @@
+{
+  "gws": [
+    {
+      "callsign": "OPT-GW1",
+      "lon": 127.137753,
+      "lat": 37.36804923,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    }
+  ],
+  "nodes": [
+    {
+      "callsign": "Node1",
+      "lon": 127.12836027145387,
+      "lat": 37.371598155003724,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6
+    },
+    {
+      "callsign": "Node2",
+      "lon": 127.13972210884096,
+      "lat": 37.373124360319295,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6
+    },
+    {
+      "callsign": "Node3",
+      "lon": 127.1432948112488,
+      "lat": 37.37172605049593,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6
+    },
+    {
+      "callsign": "Node4",
+      "lon": 127.13816642761232,
+      "lat": 37.36659300685077,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6
+    },
+    {
+      "callsign": "Node5",
+      "lon": 127.12683677673341,
+      "lat": 37.381888781772936,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6
+    },
+    {
+      "callsign": "Node6",
+      "lon": 127.1415138244629,
+      "lat": 37.38732766444449,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6
+    },
+    {
+      "callsign": "Node7",
+      "lon": 127.1501398086548,
+      "lat": 37.369406845032344,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6
+    },
+    {
+      "callsign": "Node8",
+      "lon": 127.13293075561525,
+      "lat": 37.377702789955144,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6
+    },
+    {
+      "callsign": "Node9",
+      "lon": 127.15410947799684,
+      "lat": 37.377131567252306,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6
+    },
+    {
+      "callsign": "Node10",
+      "lon": 127.11411237716675,
+      "lat": 37.37585269468192,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6
+    }
+  ],
+  "result": {
+    "n_covered": 7,
+    "n_total": 10,
+    "gw_counts": {
+      "OPT-GW1": 7
+    },
+    "nodes": [
+      {
+        "covered": true,
+        "best_gw": "OPT-GW1",
+        "best_pr": -102.5,
+        "gw_prs": {
+          "OPT-GW1": -102.5
+        },
+        "macro_pr": -102.5,
+        "n_rx_gw": 1
+      },
+      {
+        "covered": false,
+        "best_gw": "OPT-GW1",
+        "best_pr": -210.8,
+        "gw_prs": {
+          "OPT-GW1": -210.8
+        },
+        "macro_pr": -210.8,
+        "n_rx_gw": 0
+      },
+      {
+        "covered": true,
+        "best_gw": "OPT-GW1",
+        "best_pr": -96.7,
+        "gw_prs": {
+          "OPT-GW1": -96.7
+        },
+        "macro_pr": -96.7,
+        "n_rx_gw": 1
+      },
+      {
+        "covered": true,
+        "best_gw": "OPT-GW1",
+        "best_pr": -75.4,
+        "gw_prs": {
+          "OPT-GW1": -75.4
+        },
+        "macro_pr": -75.4,
+        "n_rx_gw": 1
+      },
+      {
+        "covered": false,
+        "best_gw": "OPT-GW1",
+        "best_pr": -220.6,
+        "gw_prs": {
+          "OPT-GW1": -220.6
+        },
+        "macro_pr": -220.6,
+        "n_rx_gw": 0
+      },
+      {
+        "covered": true,
+        "best_gw": "OPT-GW1",
+        "best_pr": -116.0,
+        "gw_prs": {
+          "OPT-GW1": -116.0
+        },
+        "macro_pr": -116.0,
+        "n_rx_gw": 1
+      },
+      {
+        "covered": true,
+        "best_gw": "OPT-GW1",
+        "best_pr": -105.4,
+        "gw_prs": {
+          "OPT-GW1": -105.4
+        },
+        "macro_pr": -105.4,
+        "n_rx_gw": 1
+      },
+      {
+        "covered": true,
+        "best_gw": "OPT-GW1",
+        "best_pr": -106.1,
+        "gw_prs": {
+          "OPT-GW1": -106.1
+        },
+        "macro_pr": -106.1,
+        "n_rx_gw": 1
+      },
+      {
+        "covered": true,
+        "best_gw": "OPT-GW1",
+        "best_pr": -112.8,
+        "gw_prs": {
+          "OPT-GW1": -112.8
+        },
+        "macro_pr": -112.8,
+        "n_rx_gw": 1
+      },
+      {
+        "covered": false,
+        "best_gw": "OPT-GW1",
+        "best_pr": -222.5,
+        "gw_prs": {
+          "OPT-GW1": -222.5
+        },
+        "macro_pr": -222.5,
+        "n_rx_gw": 0
+      }
+    ]
+  }
+}

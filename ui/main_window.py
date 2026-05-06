@@ -714,6 +714,13 @@ class MainWindow(QMainWindow):
         self.lbl.setText(f"히트맵: {', '.join(sel)}")
         self.status.showMessage(f"히트맵 완료: {', '.join(sel)}")
 
+        # ── 히트맵 완료 후 커버리지 자동 실행 ──────────────────
+        active_gws = [g for g in gws if g.enabled]
+        if active_gws and nodes:
+            self.status.showMessage(
+                f"히트맵 완료 — 커버리지 분석 자동 시작...")
+            self._run_coverage(active_gws)
+
     # ── 최적 배치 결과 ───────────────────────────────────────
 
     def _on_optimize_done(self, result, nodes):
