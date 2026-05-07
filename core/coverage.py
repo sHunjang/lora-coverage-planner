@@ -64,9 +64,17 @@ class CoverageEngine:
 
     def _model(self, hb, hm):
         from core.propagation import PathLossModel
-        return PathLossModel(self.spatial, h_station=hm,
-                             hb_gw=hb, env=self.env,
-                             fc=self.fc, n_samples=self.n_samples)
+        prop_model = self.settings.get('prop_model', 'smartcity') \
+                    if hasattr(self, 'settings') else 'smartcity'
+        return PathLossModel(
+            self.spatial,
+            h_station  = hm,
+            hb_gw      = hb,
+            env        = self.env,
+            fc         = self.fc,
+            n_samples  = self.n_samples,
+            prop_model = prop_model,
+        )
 
     def run(self, gws, nodes, cb=None):
         def _log(m):
@@ -228,6 +236,7 @@ class CoverageEngine:
             fc         = self.fc,
             n_samples  = min(50, self.n_samples),
             diff_order = 2,
+            prop_model = self.settings.get('prop_model', 'smartcity'),  # ← 추가
         )
         eirp = float(gw.pt_dbm + gw.gt_dbi - gw.lt_db)
 
@@ -353,6 +362,7 @@ class CoverageEngine:
                 fc         = self.fc,
                 n_samples  = min(50, self.n_samples),
                 diff_order = 2,
+                prop_model = self.settings.get('prop_model', 'smartcity'),
             )
 
             # GW 중심 반경 마스크
@@ -478,45 +488,58 @@ class CoverageEngine:
 
         if color_levels:
             # 내림차순 정렬 보장
-            levels = sorted(color_levels, key=lambda x: -x['pr'])
-            pr_min = float(levels[-1]['pr'])  # 가장 낮은 레벨
+            levels    = sorted(color_levels, key=lambda x: -x['pr'])
+            pr_min    = float(levels[-1]['pr'])
+            pr_max_lv = float(levels[0]['pr'])
 
-            # cm_display: 커버리지 마스크 & pr_min 이상인 픽셀만 표시
             cm_display = cm & boundary_mask & (ps >= pr_min)
 
-            for row in range(rows):
-                for col in range(cols):
-                    if not cm_display[row, col]:
-                        continue
-                    pv = ps[row, col]
-                    # 해당 픽셀의 색상 결정 (가장 높은 임계값부터 비교)
-                    chosen_color = None
-                    for lv in levels:
-                        if pv >= lv['pr']:
-                            chosen_color = lv['color']
-                            break
-                    if chosen_color is None:
-                        continue
-                    # hex → RGB
-                    hx = chosen_color.lstrip('#')
-                    r, g, b = int(hx[0:2],16), int(hx[2:4],16), int(hx[4:6],16)
-                    # 알파: 신호 강도에 따라 0.5~0.85
-                    pr_max_lv = float(levels[0]['pr'])
-                    alpha = 0.5 + 0.35 * np.clip((pv - pr_min) / max(pr_max_lv - pr_min, 1), 0, 1)
-                    rgba[row, col] = [r, g, b, int(alpha * 255)]
+            # 색상 배열 초기화
+            r_arr    = np.zeros((rows, cols), dtype=np.uint8)
+            g_arr    = np.zeros((rows, cols), dtype=np.uint8)
+            b_arr    = np.zeros((rows, cols), dtype=np.uint8)
+            assigned = np.zeros((rows, cols), dtype=bool)
+
+            # 낮은 레벨부터 높은 레벨 순으로 덮어쓰기
+            # (높은 dBm이 최종적으로 남도록 reversed)
+            for lv in reversed(levels):
+                hx = lv['color'].lstrip('#')
+                rv, gv, bv = int(hx[0:2], 16), int(hx[2:4], 16), int(hx[4:6], 16)
+                lv_mask = cm_display & (ps >= lv['pr'])
+                r_arr[lv_mask] = rv
+                g_arr[lv_mask] = gv
+                b_arr[lv_mask] = bv
+                assigned[lv_mask] = True
+
+            # 알파: 신호 강도에 따라 0.5~0.85
+            denom = max(pr_max_lv - pr_min, 1.0)
+            alpha = np.where(
+                assigned,
+                (0.5 + 0.35 * np.clip((ps - pr_min) / denom, 0, 1)) * 255,
+                0
+            ).astype(np.uint8)
+
+            rgba[..., 0] = r_arr
+            rgba[..., 1] = g_arr
+            rgba[..., 2] = b_arr
+            rgba[..., 3] = alpha
+
         else:
             # color_levels 없으면 기존 jet 방식 fallback
-            import matplotlib; matplotlib.use('Agg')
+            import matplotlib
+            matplotlib.use('Agg')
             import matplotlib.pyplot as plt
             import matplotlib.colors as mc
-            pr_min = float(min_rx)
+
+            pr_min        = float(min_rx)
             pr_max_actual = float(np.nanmax(np.where(boundary_mask, ps, np.nan)))
-            vmin, vmax = pr_min, max(pr_max_actual, pr_min + 1.0)
-            cm_display = cm & boundary_mask & (ps >= vmin)
-            cmap = plt.colormaps['jet']
-            norm = mc.Normalize(vmin=vmin, vmax=vmax, clip=True)
+            vmin, vmax    = pr_min, max(pr_max_actual, pr_min + 1.0)
+            cm_display    = cm & boundary_mask & (ps >= vmin)
+
+            cmap   = plt.colormaps['jet']
+            norm   = mc.Normalize(vmin=vmin, vmax=vmax, clip=True)
             rgba_f = cmap(norm(ps)).astype(float)
-            pn = np.clip((ps - vmin) / (vmax - vmin), 0, 1)
+            pn     = np.clip((ps - vmin) / (vmax - vmin), 0, 1)
             rgba_f[..., 3] = np.where(cm_display, 0.45 + 0.35 * pn, 0.0)
             rgba = (rgba_f * 255).astype(np.uint8)
 

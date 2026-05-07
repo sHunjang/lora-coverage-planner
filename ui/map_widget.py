@@ -8,12 +8,19 @@ from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
 
 BOUNDS = (127.02772, 37.33338, 127.19584, 37.47482)
 
+# GW별 고유 색상 팔레트 (Folium 지원 색상)
+GW_COLORS = [
+    'red', 'blue', 'green', 'purple', 'orange',
+    'darkred', 'darkblue', 'darkgreen', 'darkpurple', 'cadetblue',
+    'pink', 'lightblue', 'lightgreen', 'beige', 'black',
+]
+
 
 class MapBridge(QObject):
-    clicked    = pyqtSignal(float, float)
+    clicked       = pyqtSignal(float, float)
     right_clicked = pyqtSignal(float, float)
-    gw_dragged = pyqtSignal(str, float, float)
-    nd_dragged = pyqtSignal(str, float, float)
+    gw_dragged    = pyqtSignal(str, float, float)
+    nd_dragged    = pyqtSignal(str, float, float)
 
     @pyqtSlot(float, float)
     def mapClicked(self, lon, lat):
@@ -33,10 +40,10 @@ class MapBridge(QObject):
 
 
 class MapWidget(QWidget):
-    sig_map_clicked = pyqtSignal(float, float)
+    sig_map_clicked       = pyqtSignal(float, float)
     sig_map_right_clicked = pyqtSignal(float, float)
-    sig_gw_dragged  = pyqtSignal(str, float, float)
-    sig_nd_dragged  = pyqtSignal(str, float, float)
+    sig_gw_dragged        = pyqtSignal(str, float, float)
+    sig_nd_dragged        = pyqtSignal(str, float, float)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -67,7 +74,14 @@ class MapWidget(QWidget):
         m = folium.Map(location=c, zoom_start=12,
                        tiles=tile, prefer_canvas=True)
 
-        # ── 거리 측정선 표시 ──────────────────────────────────────
+        # ── GW별 색상 맵 생성 ────────────────────────────────
+        gw_color_map = {}  # callsign → folium color
+        if gws:
+            active_gws = [g for g in gws if g.enabled]
+            for i, gw in enumerate(active_gws):
+                gw_color_map[gw.callsign] = GW_COLORS[i % len(GW_COLORS)]
+
+        # ── 거리 측정선 표시 ─────────────────────────────────
         if measure_pts and len(measure_pts) >= 1:
             import math
 
@@ -76,37 +90,26 @@ class MapWidget(QWidget):
                 la1, lo1 = math.radians(p1[1]), math.radians(p1[0])
                 la2, lo2 = math.radians(p2[1]), math.radians(p2[0])
                 dlat = la2 - la1; dlon = lo2 - lo1
-                a = math.sin(dlat/2)**2 + math.cos(la1)*math.cos(la2)*math.sin(dlon/2)**2
+                a = (math.sin(dlat/2)**2
+                     + math.cos(la1)*math.cos(la2)*math.sin(dlon/2)**2)
                 return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
 
-            # 측정 점 마커
             for i, (lon, lat) in enumerate(measure_pts):
                 folium.CircleMarker(
-                    location=[lat, lon],
-                    radius=6,
-                    color='#FFD700',
-                    fill=True,
-                    fill_color='#FFD700',
-                    fill_opacity=1.0,
+                    location=[lat, lon], radius=6,
+                    color='#FFD700', fill=True,
+                    fill_color='#FFD700', fill_opacity=1.0,
                     tooltip=f"P{i+1} ({lat:.5f}, {lon:.5f})",
                 ).add_to(m)
 
-            # 측정선 및 거리 레이블
             for i in range(len(measure_pts) - 1):
-                p1 = measure_pts[i]
-                p2 = measure_pts[i+1]
+                p1 = measure_pts[i]; p2 = measure_pts[i+1]
                 dist = _haversine(p1, p2)
-
-                # 측정선
                 folium.PolyLine(
                     locations=[[p1[1], p1[0]], [p2[1], p2[0]]],
-                    color='#FFD700',
-                    weight=2.5,
-                    dash_array='8 4',
-                    opacity=0.9,
+                    color='#FFD700', weight=2.5,
+                    dash_array='8 4', opacity=0.9,
                 ).add_to(m)
-
-                # 중간 지점 거리 레이블
                 mid_lat = (p1[1] + p2[1]) / 2
                 mid_lon = (p1[0] + p2[0]) / 2
                 folium.Marker(
@@ -122,8 +125,7 @@ class MapWidget(QWidget):
                             font-weight:bold;
                             white-space:nowrap;
                             ">{dist:.3f} km</div>''',
-                        icon_size=(90, 24),
-                        icon_anchor=(45, 12),
+                        icon_size=(90, 24), icon_anchor=(45, 12),
                     ),
                 ).add_to(m)
 
@@ -139,7 +141,6 @@ class MapWidget(QWidget):
                 ).add_to(lyr)
                 lyr.add_to(m)
 
-                # 등고선
                 if 'contours' in hm:
                     for cl in hm['contours']:
                         cl_lyr = folium.FeatureGroup(
@@ -167,7 +168,6 @@ class MapWidget(QWidget):
                             ).add_to(cl_lyr)
                         cl_lyr.add_to(m)
 
-                # SF별 커버리지 레이어
                 if 'sf_layers' in hm:
                     for sl in hm['sf_layers']:
                         sf_lyr = folium.FeatureGroup(
@@ -175,76 +175,54 @@ class MapWidget(QWidget):
                             show=False)
                         for seg in sl['segments']:
                             folium.PolyLine(
-                                locations=seg,
-                                color=sl['color'],
-                                weight=2.5,
-                                opacity=0.85,
-                                tooltip=sl['label'],
-                                dash_array='8 4',
+                                locations=seg, color=sl['color'],
+                                weight=2.5, opacity=0.85,
+                                tooltip=sl['label'], dash_array='8 4',
                             ).add_to(sf_lyr)
                         sf_lyr.add_to(m)
 
         # ── Node 마커 ────────────────────────────────────────
         if nodes:
-                    nd_lyr = folium.FeatureGroup(name="Nodes", show=True)
-                    for ni, nd in enumerate(nodes):
-                        if result and ni < len(result.nodes):
-                            info = result.nodes[ni]
-                            cov  = info.covered
-                            pr   = info.best_pr
-                            tip  = (f"{nd.callsign} | "
-                                    f"{'✓ 커버' if cov else '✗ 미커버'} | "
-                                    f"최대 Pr={pr:.1f}dBm")
-                            # Pr 값 기준으로 색상 결정
-                            if not cov:
-                                marker_color = 'gray'
-                            elif pr >= -90:
-                                marker_color = 'red'       # -90dBm 이상 → 빨강
-                            elif pr >= -100:
-                                marker_color = 'orange'    # -100dBm 이상 → 주황
-                            elif pr >= -110:
-                                marker_color = 'beige'     # -110dBm 이상 → 노랑
-                            elif pr >= -120:
-                                marker_color = 'green'     # -120dBm 이상 → 초록
-                            else:
-                                marker_color = 'blue'      # -120dBm 미만 → 파랑
-                        else:
-                            marker_color = 'gray'
-                            tip = nd.callsign
-                        folium.Marker(
-                            location=[nd.lat, nd.lon],
-                            tooltip=tip,
-                            icon=folium.Icon(
-                                color=marker_color,
-                                icon_color='white',
-                                icon='mobile',
-                                prefix='fa',
-                            ),
-                            draggable=True,
-                        ).add_to(nd_lyr)
-                    nd_lyr.add_to(m)
+            nd_lyr = folium.FeatureGroup(name="Nodes", show=True)
+            for ni, nd in enumerate(nodes):
+                if result and ni < len(result.nodes):
+                    info = result.nodes[ni]
+                    cov  = info.covered
+                    pr   = info.best_pr
+                    tip  = (f"{nd.callsign} | "
+                            f"{'✓ 커버' if cov else '✗ 미커버'} | "
+                            f"최대 Pr={pr:.1f}dBm | "
+                            f"연결 GW: {info.best_gw or '없음'}")
+                    if cov and info.best_gw:
+                        # 연결된 GW의 색상 사용
+                        marker_color = gw_color_map.get(info.best_gw, 'gray')
+                    else:
+                        marker_color = 'gray'  # 미커버
+                else:
+                    marker_color = 'gray'
+                    tip = nd.callsign
+
+                folium.Marker(
+                    location=[nd.lat, nd.lon],
+                    tooltip=tip,
+                    icon=folium.Icon(
+                        color=marker_color,
+                        icon_color='white',
+                        icon='mobile',
+                        prefix='fa',
+                    ),
+                    draggable=True,
+                ).add_to(nd_lyr)
+            nd_lyr.add_to(m)
 
         # ── GW 마커 ──────────────────────────────────────────
         if gws:
             gw_lyr = folium.FeatureGroup(name="Gateway", show=True)
-            try:
-                sel = set(selected_gws) if selected_gws else set()
-            except TypeError:
-                sel = set()
             for gw in gws:
                 if not gw.enabled:
                     continue
-                is_sel = gw.callsign in sel
-                is_opt = gw.callsign.startswith("OPT-")
-                if is_opt:
-                    icon_color   = '#00FF88'
-                    marker_color = 'darkgreen'
-                elif is_sel:
-                    icon_color   = '#FFD700'
-                    marker_color = 'orange'
-                else:
-                    icon_color   = 'white'
-                    marker_color = 'gray'
+                # GW별 고유 색상 사용
+                marker_color = gw_color_map.get(gw.callsign, 'gray')
                 tip = (f"{gw.callsign} | "
                        f"Pt={gw.pt_dbm}dBm Gt={gw.gt_dbi}dBi "
                        f"h={gw.hb_m}m")
@@ -253,7 +231,7 @@ class MapWidget(QWidget):
                     tooltip=tip,
                     icon=folium.Icon(
                         color=marker_color,
-                        icon_color=icon_color,
+                        icon_color='white',
                         icon='broadcast-tower',
                         prefix='fa',
                     ),
@@ -273,7 +251,7 @@ new QWebChannel(qt.webChannelTransport, function(ch){
     _bridge = ch.objects.bridge;
 });
 </script>"""))
-        
+
         m.get_root().script.add_child(folium.Element(f"""
 (function waitMap(){{
     var mapObj = window['{map_name}'];
@@ -296,7 +274,6 @@ new QWebChannel(qt.webChannelTransport, function(ch){
                 var tip = e.target.getTooltip();
                 if(!tip) return;
                 var content = tip.getContent();
-                // HTML 태그 제거 후 첫 번째 ' | ' 앞부분 추출
                 var text = content.replace(/<[^>]*>/g, '').trim();
                 var cs = text.split(' | ')[0].trim();
                 if(content.indexOf('Pt=') !== -1){{

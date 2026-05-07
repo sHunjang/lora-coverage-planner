@@ -281,7 +281,9 @@ class PathLossModel:
                  fc: float = 915.0,
                  n_samples: int = 100,
                  diff_order: int = 2,
-                 hb_gw: float | None = None):
+                 hb_gw: float | None = None,
+                 prop_model: str = 'smartcity',
+                 ):
         """
         Parameters
         ----------
@@ -289,10 +291,13 @@ class PathLossModel:
         hb_gw     : GW 안테나 높이 hb (m). None이면 h_station과 동일.
                     GW↔station 링크 계산 시 반드시 GW 안테나 높이를 지정해야
                     Song's Model이 올바른 hb/hm으로 PL을 계산함.
+        prop_model : 'smartcity' = SmartCity LoRaScape Model (기존 Song's)
+                     'cost231'   = COST-231 Hata Model
         """
         self.spatial    = spatial
         self.h_station  = h_station
         self.n_samples  = n_samples
+        self.prop_model = prop_model
 
         # hb: GW 안테나 높이, hm: station 안테나 높이
         hb = hb_gw if hb_gw is not None else h_station
@@ -300,7 +305,13 @@ class PathLossModel:
 
         self._auto_env = (env == 0)     # env=0 이면 경로별 자동 분류
         _env = env if env != 0 else 2   # 초기 기본값 Urban
+        
+        
+        # SmartCity LoRaScape Model
         self.songs = SongsModel(fc=fc, hb=hb, hm=hm, env=_env)
+        
+        # COST-231 Hata Model
+        self.cost231 = COST231HataModel(fc=fc, hb=hb, hm=hm, env=_env)
 
         self.deygout = DeygoutDiff(fc=fc, max_order=diff_order)
 
@@ -350,7 +361,12 @@ class PathLossModel:
         d_m  = max(np.hypot(x2 - x1, y2 - y1), 1.0)
         d_km = d_m / 1000.0
 
-        pl_songs = self.songs.path_loss(d_km)
+        if self.prop_model == 'cost231':
+            pl_base = self.cost231.path_loss(d_km)
+        
+        else:
+            pl_base = self.songs.path_loss(d_km)
+            
         dists, elevs = self._sample_profile(x1, y1, x2, y2)
 
         # ── LOS/NLOS 판단 ─────────────────────────────────────
@@ -366,14 +382,14 @@ class PathLossModel:
             r_inf_m = np.sqrt(4 * self._h_tx * self._h_rx / lam)
             if d_m <= r_inf_m and len(elevs) > 2:
                 if float(np.max(elevs[1:-1])) > gw_abs:
-                    return pl_songs + 20.0
-            return pl_songs
+                    return pl_base + 20.0
+            return pl_base
         else:
             # NLOS: DL = PL_FS + LD_t
             # max(Song's Model, DL) 적용
             l_diff = self.deygout.diffraction_loss(
                 dists, elevs, h_tx=self._h_tx, h_rx=self._h_rx)
-            return max(pl_songs, l_diff)
+            return max(pl_base, l_diff)
 
     # ── 상세 분해 (디버그/분석용) ────────────────────────────
     def path_loss_detail(self, x1, y1, x2, y2) -> dict:
@@ -424,3 +440,92 @@ class PathLossModel:
             'dists'   : dists,
             'elevs'   : elevs,
         }
+
+
+# ══════════════════════════════════════════════════════════════
+# COST-231 Hata Model
+# ══════════════════════════════════════════════════════════════
+
+class COST231HataModel:
+    """
+    COST-231 Hata 모델 기반 경로 손실.
+
+    PL = 46.3 + 33.9·log(f) - 13.82·log(hb) - a(hm)
+       + (44.9 - 6.55·log(hb))·log(d) + Cm
+
+    환경(env):
+      1 = Dense Urban  → Cm = 3 dB, a(hm) 대도시 수식
+      2 = Urban        → Cm = 0 dB, a(hm) 일반도시 수식
+      3 = Suburban     → Cm = 0 dB, 교외 보정
+      4 = Open         → Cm = 0 dB, 개활지 보정
+
+    Parameters
+    ----------
+    fc  : 반송 주파수 (MHz), 150~2000 MHz
+    hb  : 기지국(GW) 안테나 높이 (m)
+    hm  : 단말 안테나 높이 (m)
+    env : 환경 코드 (1~4)
+    """
+
+    def __init__(self, fc: float = 915.0, hb: float = 15.0,
+                 hm: float = 1.5, env: int = 2):
+        self.fc  = fc
+        self.hb  = max(hb, 1.0)
+        self.hm  = max(hm, 0.1)
+        self.env = env
+
+    def _ahm(self) -> float:
+        """단말 안테나 높이 보정값 a(hm)."""
+        fc, hm = self.fc, self.hm
+        if self.env == 1:
+            # 대도시 (Dense Urban)
+            if fc <= 300:
+                return 8.29 * (np.log10(1.54 * hm)) ** 2 - 1.1
+            else:
+                return 3.2 * (np.log10(11.75 * hm)) ** 2 - 4.97
+        else:
+            # 일반 도시 / 교외 / 개활지
+            return ((1.1 * np.log10(fc) - 0.7) * hm
+                    - (1.56 * np.log10(fc) - 0.8))
+
+    def path_loss(self, d_km: float) -> float:
+        """
+        COST-231 Hata 경로 손실 (dB).
+
+        env=1 (Dense Urban): Cm=3, 대도시 a(hm)
+        env=2 (Urban):       Cm=0, 일반 a(hm)
+        env=3 (Suburban):    Urban PL - 2·(log(fc/28))² - 5.4
+        env=4 (Open):        Urban PL - 4.78·(log(fc))² + 18.33·log(fc) - 40.94
+        """
+        d   = max(d_km, 1e-3)
+        fc  = self.fc
+        hb  = self.hb
+        ahm = self._ahm()
+
+        if self.env in (1, 2):
+            Cm = 3.0 if self.env == 1 else 0.0
+            pl = (46.3
+                  + 33.9 * np.log10(fc)
+                  - 13.82 * np.log10(hb)
+                  - ahm
+                  + (44.9 - 6.55 * np.log10(hb)) * np.log10(d)
+                  + Cm)
+            return pl
+        else:
+            # 먼저 Urban(env=2) PL 계산
+            ahm_urban = ((1.1 * np.log10(fc) - 0.7) * self.hm
+                         - (1.56 * np.log10(fc) - 0.8))
+            pl_urban = (46.3
+                        + 33.9 * np.log10(fc)
+                        - 13.82 * np.log10(hb)
+                        - ahm_urban
+                        + (44.9 - 6.55 * np.log10(hb)) * np.log10(d))
+            if self.env == 3:
+                # Suburban
+                return pl_urban - 2 * (np.log10(fc / 28)) ** 2 - 5.4
+            else:
+                # Open
+                return (pl_urban
+                        - 4.78 * (np.log10(fc)) ** 2
+                        + 18.33 * np.log10(fc)
+                        - 40.94)

@@ -31,6 +31,7 @@ DEFAULT_SETTINGS = {
     "heatmap_diff"  : False,
     "map_tile"      : "CartoDB Voyager",
     "cov_n_samples" : 100,
+    "prop_model"    : "smartcity",
 }
 
 ENV_LABELS = {
@@ -147,6 +148,11 @@ class SettingsWindow(QDialog):
         self.sp_nsamp  = _ispin(20, 500, 100)
         self.sp_dorder = _ispin(1, 3, 2)
 
+        self.cb_model = QComboBox()
+        self.cb_model.addItem("SmartCity LoRaScape Model", "smartcity")
+        self.cb_model.addItem("COST-231 Hata Model",       "cost231")
+
+        fl1.addRow("전파 모델",         self.cb_model)
         fl1.addRow("반송 주파수",       self.sp_fc)
         fl1.addRow("전파 환경",         self.cb_env)
         fl1.addRow("DEM 샘플 수",       self.sp_nsamp)
@@ -254,6 +260,12 @@ class SettingsWindow(QDialog):
         s = self._settings
         self.sp_fc.setValue(s.get("fc_mhz", 915.0))
 
+        model_val = s.get("prop_model", "smartcity")
+        for i in range(self.cb_model.count()):
+            if self.cb_model.itemData(i) == model_val:
+                self.cb_model.setCurrentIndex(i)
+                break
+
         env_val = s.get("env", 0)
         for i in range(self.cb_env.count()):
             if self.cb_env.itemData(i) == env_val:
@@ -300,6 +312,7 @@ class SettingsWindow(QDialog):
             "heatmap_step"  : self.sp_hm_step.value(),
             "heatmap_diff"  : self.chk_hm_diff.isChecked(),
             "map_tile"      : self.cb_tile.currentText(),
+            "prop_model"    : self.cb_model.currentData(),
         }
 
     def _apply(self):
