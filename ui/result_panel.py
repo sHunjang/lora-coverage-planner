@@ -245,8 +245,9 @@ class ResultPanel(QWidget):
         gw_counts = result.gw_counts
         if gw_counts:
             lines = []
+            max_cnt = max(gw_counts.values()) if max(gw_counts.values()) > 0 else 1  # ← 수정
             for cs, cnt in sorted(gw_counts.items(), key=lambda x: -x[1])[:8]:
-                bar_len = int(cnt / max(gw_counts.values()) * 10)
+                bar_len = int(cnt / max_cnt * 10)
                 lines.append(f"{cs}: {'█'*bar_len} {cnt}개")
             if len(gw_counts) > 8:
                 lines.append(f"… 외 {len(gw_counts)-8}개")

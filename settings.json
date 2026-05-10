@@ -1,6 +1,6 @@
 {
   "fc_mhz": 915.0,
-  "env": 0,
+  "env": 1,
   "n_samples": 100,
   "diff_order": 2,
   "gw_pt_dbm": 14.0,
@@ -12,8 +12,8 @@
   "nd_hm_m": 1.5,
   "nd_min_rx": -126.6,
   "nd_indoor_loss": 0.0,
-  "heatmap_step": 0.0015,
+  "heatmap_step": 0.00018,
   "heatmap_diff": false,
   "map_tile": "CartoDB Voyager",
-  "prop_model": "smartcity"
+  "prop_model": "cost231"
 }

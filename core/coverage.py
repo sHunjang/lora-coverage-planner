@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable
 import numpy as np
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import os
 
 
 @dataclass
@@ -34,9 +35,8 @@ class LinkResult:
     best_gw   : str   = ""
     best_pr   : float = -999.0
     gw_prs    : dict  = field(default_factory=dict)
-    macro_pr  : float = -999.0   # MRC 합성 수신 전력
-    n_rx_gw   : int   = 0        # 수신 가능 GW 수
-
+    macro_pr  : float = -999.0
+    n_rx_gw   : int   = 0
 
 @dataclass
 class CoverageResult:
@@ -84,7 +84,6 @@ class CoverageEngine:
             7: -123.0, 8: -126.0, 9: -129.0,
             10: -132.0, 11: -134.5, 12: -137.0,
         }
-        # SF별 ToA (ms), SF7~SF12, BW=125kHz, CR=4/5, payload=20byte 기준
         SF_TOA = {
             7: 61.7, 8: 123.4, 9: 246.8,
             10: 493.5, 11: 987.1, 12: 1974.1,
@@ -104,10 +103,10 @@ class CoverageEngine:
 
         _log(f"분석 시작: GW {len(active)}개 × Node {len(nodes)}개")
 
-        macro_gains = []
+        macro_gains  = []
         n_rx_gw_list = []
-        adr_sf_dist = {sf: 0 for sf in range(7, 13)}
-        toa_list = []
+        adr_sf_dist  = {sf: 0 for sf in range(7, 13)}
+        toa_list     = []
 
         for ni, nd in enumerate(nodes):
             nx, ny  = float(nd_xy[ni][0]), float(nd_xy[ni][1])
@@ -119,18 +118,16 @@ class CoverageEngine:
                 gx, gy = float(gw_xy[gw.callsign][0]), float(gw_xy[gw.callsign][1])
                 model  = self._model(gw.hb_m, nd.hm_m)
                 pl     = model.path_loss(gx, gy, nx, ny)
-                # 실내 투과 손실 적용
                 indoor = getattr(nd, 'indoor_loss_db', 0.0)
-                pr     = gw.pt_dbm + gw.gt_dbi - gw.lt_db - pl + nd.gr_dbi - nd.lr_db - indoor
+                pr     = (gw.pt_dbm + gw.gt_dbi - gw.lt_db
+                          - pl + nd.gr_dbi - nd.lr_db - indoor)
                 gw_prs[gw.callsign] = round(float(pr), 1)
                 if pr > best_pr:
                     best_pr, best_gw = pr, gw.callsign
 
-            # 수신 가능 GW 목록 (min_rx 이상)
             rx_gws = [cs for cs, pr in gw_prs.items() if pr >= nd.min_rx_dbm]
             n_rx   = len(rx_gws)
 
-            # MRC (Maximum Ratio Combining) — 선형 합산 후 dBm 변환
             if n_rx >= 2:
                 linear_sum = sum(10 ** (gw_prs[cs] / 10) for cs in rx_gws)
                 macro_pr   = 10 * np.log10(linear_sum)
@@ -144,9 +141,8 @@ class CoverageEngine:
 
             cov = best_pr >= nd.min_rx_dbm
 
-            # ADR: 커버된 Node의 최적 SF 결정
             if cov:
-                adr_sf = 12  # 기본값 (가장 낮은 데이터레이트)
+                adr_sf = 12
                 for sf in sorted(SF_SENS.keys()):
                     if best_pr >= SF_SENS[sf]:
                         adr_sf = sf
@@ -169,7 +165,6 @@ class CoverageEngine:
             if (ni + 1) % max(1, len(nodes) // 10) == 0:
                 _log(f"  {ni+1}/{len(nodes)} ({(ni+1)/len(nodes)*100:.0f}%)")
 
-        # 통계 집계
         result.macro_diversity_gain = float(np.mean(macro_gains)) if macro_gains else 0.0
         result.avg_n_rx_gw          = float(np.mean(n_rx_gw_list)) if n_rx_gw_list else 0.0
         result.adr_sf_distribution  = adr_sf_dist
@@ -179,15 +174,8 @@ class CoverageEngine:
         return result
 
     def heatmap(self, gw, min_rx, step=0.0015, cb=None,
-            use_deygout=False, radius_km=12.0,
-            pr_min=None, pr_max=None):
-        """
-        PDF 명세 기반 히트맵 계산.
-        - LOS: Song's Model (변곡점 거리 내 장애물 시 +20dB)
-        - NLOS: max(Song's, PL_FS + Deygout)
-        GW 중심 radius_km 반경 + 성남시 경계 교집합으로 계산 범위 제한.
-        pr_min: 범례 최솟값 미만 픽셀 투명 처리
-        """
+                use_deygout=False, radius_km=12.0,
+                pr_min=None, pr_max=None):
         import base64, io
         from pyproj import Transformer
         from scipy.ndimage import gaussian_filter, label as nd_label
@@ -216,17 +204,18 @@ class CoverageEngine:
             mask_poly = np.array([self.spatial.polygon_4326.contains(
                 Point(lo, la)) for lo, la in zip(fl, fa)])
 
-        dist_deg = np.sqrt(((fl - gw.lon) / deg_lon)**2 +
-                        ((fa - gw.lat) / deg_lat)**2) * radius_km
+        dist_deg    = np.sqrt(((fl - gw.lon) / deg_lon)**2 +
+                              ((fa - gw.lat) / deg_lat)**2) * radius_km
         mask_circle = dist_deg <= radius_km
-        mask = mask_poly & mask_circle
+        mask        = mask_poly & mask_circle
 
         tr = Transformer.from_crs('EPSG:4326', 'EPSG:3857', always_xy=True)
-        px, py     = tr.transform(fl, fa)
+        px, py         = tr.transform(fl, fa)
         gx_arr, gy_arr = tr.transform(gw.lon, gw.lat)
-        gx, gy     = float(gx_arr), float(gy_arr)
+        gx, gy         = float(gx_arr), float(gy_arr)
 
-        # ── PathLossModel 사용 (propagation.py와 동일한 로직) ──
+        # ── 히트맵 전용 경량 모델 ────────────────────────────
+        N_SAMP_HM = max(30, min(50, self.n_samples // 2))  # ← 10~20 → 30~50
         from core.propagation import PathLossModel
         model = PathLossModel(
             self.spatial,
@@ -234,32 +223,48 @@ class CoverageEngine:
             hb_gw      = float(gw.hb_m),
             env        = self.env,
             fc         = self.fc,
-            n_samples  = min(50, self.n_samples),
-            diff_order = 2,
-            prop_model = self.settings.get('prop_model', 'smartcity'),  # ← 추가
+            n_samples  = N_SAMP_HM,
+            diff_order = 2,            # ← 1 → 2 복원
+            prop_model = self.settings.get('prop_model', 'smartcity'),
         )
         eirp = float(gw.pt_dbm + gw.gt_dbi - gw.lt_db)
+        idx  = np.where(mask)[0]
+        pf   = np.full(len(px), float(min_rx) - 50.0)
 
-        idx    = np.where(mask)[0]
-        pf     = np.full(len(px), float(min_rx) - 50.0)
-        px_f   = px.astype(np.float64)
-        py_f   = py.astype(np.float64)
+        if cb: cb(f"히트맵 계산 중... ({len(idx):,}개 격자점)")
 
-        if cb: cb(f"히트맵 계산 중... ({len(idx)}개 격자점)")
+        px_idx  = px.astype(np.float64)[idx]
+        py_idx  = py.astype(np.float64)[idx]
+        n_workers = min(os.cpu_count() or 4, 16)
 
-        for k, i in enumerate(idx):
-            pl = model.path_loss(gx, gy, float(px_f[i]), float(py_f[i]))
-            pf[i] = eirp - pl
+        def _calc(k):
+            pl = model.path_loss(gx, gy,
+                                 float(px_idx[k]),
+                                 float(py_idx[k]))
+            return k, eirp - pl
 
-            if cb and (k + 1) % max(1, len(idx) // 10) == 0:
-                cb(f"  {k+1}/{len(idx)} ({(k+1)/len(idx)*100:.0f}%)")
+        completed = [0]
+        results   = np.full(len(idx), float(min_rx) - 50.0)
+
+        with ThreadPoolExecutor(max_workers=n_workers) as pool:
+            futures = {pool.submit(_calc, k): k
+                       for k in range(len(idx))}
+            for fut in as_completed(futures):
+                k, pr = fut.result()
+                results[k] = pr
+                completed[0] += 1
+                if cb and completed[0] % max(1, len(idx) // 20) == 0:
+                    pct = completed[0] / len(idx) * 100
+                    cb(f"  {completed[0]:,}/{len(idx):,} ({pct:.0f}%)")
+
+        pf[idx] = results
 
         pg            = pf.reshape(lon2d.shape)
         boundary_mask = mask.reshape(lon2d.shape)
         pg_masked     = np.where(boundary_mask, pg, np.nan)
 
         pg_filled = np.where(np.isnan(pg_masked), float(min_rx) - 50.0, pg_masked)
-        ps        = gaussian_filter(pg_filled.astype(float), sigma=0.5)
+        ps        = gaussian_filter(pg_filled.astype(float), sigma=1.5)
         ps        = np.where(boundary_mask, ps, float(min_rx) - 50.0)
 
         cov_raw    = ps >= min_rx
@@ -284,30 +289,27 @@ class CoverageEngine:
         else:
             cm = cov_raw & boundary_mask
 
-        color_levels = self.settings.get('color_levels') if hasattr(self, 'settings') else None
+        color_levels = self.settings.get('color_levels') \
+                       if hasattr(self, 'settings') else None
         url = self._render_heatmap_image(ps, cm, boundary_mask, min_rx, color_levels)
 
         if cb: cb("히트맵 완료")
         return {
             'url'     : url,
-            'bounds'  : [[latmin, lmin], [latmax, lmax]],
+            'bounds'  : [[float(latmin), float(lmin)],
+                         [float(latmax), float(lmax)]],
             'callsign': gw.callsign,
             'min_rx'  : min_rx,
             'ps'      : ps,
             'cm'      : cm,
-            'lon_min' : lmin,
-            'lat_min' : latmin,
+            'lon_min' : float(lmin),
+            'lat_min' : float(latmin),
             'step'    : step,
         }
 
     def heatmap_combined(self, gws, min_rx, step=0.0015,
-                        cb=None, radius_km=12.0,
-                        pr_min=None, pr_max=None):
-        """
-        여러 GW의 히트맵을 합성 — 각 격자점마다 최대 Pr 선택.
-        겹치는 구간은 신호가 가장 강한 GW 기준으로 표시.
-        pr_min: 범례 최솟값 미만 픽셀 투명 처리
-        """
+                         cb=None, radius_km=12.0,
+                         pr_min=None, pr_max=None):
         import base64, io
         from pyproj import Transformer
         from scipy.ndimage import gaussian_filter, label as nd_label
@@ -331,7 +333,7 @@ class CoverageEngine:
         try:
             from shapely import points as _sp, contains as _sc
             mask = _sc(self.spatial.polygon_4326,
-                    _sp(np.stack([fl, fa], axis=1)))
+                       _sp(np.stack([fl, fa], axis=1)))
         except Exception:
             from shapely.geometry import Point
             mask = np.array([self.spatial.polygon_4326.contains(
@@ -343,7 +345,9 @@ class CoverageEngine:
         py_f   = py.astype(np.float64)
 
         pr_max_grid = np.full(len(px), float(min_rx) - 50.0)
+        gw_idx_grid = np.full(len(px), -1, dtype=np.int32)
 
+        n_workers = min(os.cpu_count() or 4, 16)
         from core.propagation import PathLossModel
 
         for gi, gw in enumerate(gws):
@@ -353,56 +357,82 @@ class CoverageEngine:
             gx, gy   = float(gx_arr), float(gy_arr)
             eirp     = float(gw.pt_dbm + gw.gt_dbi - gw.lt_db)
 
-            # GW별 PathLossModel (hb_gw 반영)
+            # ── 히트맵 전용 경량 모델 ────────────────────────
+            N_SAMP_HM = max(30, min(50, self.n_samples // 2))  # ← 수정
             model = PathLossModel(
                 self.spatial,
                 h_station  = 1.5,
                 hb_gw      = float(gw.hb_m),
                 env        = self.env,
                 fc         = self.fc,
-                n_samples  = min(50, self.n_samples),
-                diff_order = 2,
+                n_samples  = N_SAMP_HM,
+                diff_order = 2,        # ← 수정
                 prop_model = self.settings.get('prop_model', 'smartcity'),
             )
 
-            # GW 중심 반경 마스크
             deg_lon_gw = radius_km / (111.0 * np.cos(np.radians(gw.lat)))
             deg_lat_gw = radius_km / 111.0
             dist_deg   = np.sqrt(((fl - gw.lon) / deg_lon_gw)**2 +
-                                ((fa - gw.lat) / deg_lat_gw)**2) * radius_km
+                                 ((fa - gw.lat) / deg_lat_gw)**2) * radius_km
             gw_mask    = mask & (dist_deg <= radius_km)
             idx        = np.where(gw_mask)[0]
 
+            px_idx = px_f[idx]
+            py_idx = py_f[idx]
+
+            def _calc_combined(k, _gx=gx, _gy=gy, _eirp=eirp, _model=model):
+                pl = _model.path_loss(_gx, _gy,
+                                      float(px_idx[k]),
+                                      float(py_idx[k]))
+                return k, _eirp - pl
+
+            results_c = np.full(len(idx), float(min_rx) - 50.0)
+            with ThreadPoolExecutor(max_workers=n_workers) as pool:
+                futures = {pool.submit(_calc_combined, k): k
+                           for k in range(len(idx))}
+                for fut in as_completed(futures):
+                    k, pr = fut.result()
+                    results_c[k] = pr
+
             for k, i in enumerate(idx):
-                pl = model.path_loss(gx, gy, float(px_f[i]), float(py_f[i]))
-                pr = eirp - pl
+                pr = results_c[k]
                 if pr > pr_max_grid[i]:
                     pr_max_grid[i] = pr
+                    gw_idx_grid[i] = gi
 
         pg            = pr_max_grid.reshape(lon2d.shape)
         boundary_mask = mask.reshape(lon2d.shape)
         pg_masked     = np.where(boundary_mask, pg, np.nan)
 
         pg_filled = np.where(np.isnan(pg_masked), float(min_rx) - 50.0, pg_masked)
-        ps        = gaussian_filter(pg_filled.astype(float), sigma=0.5)
+        ps        = gaussian_filter(pg_filled.astype(float), sigma=1.5)
         ps        = np.where(boundary_mask, ps, float(min_rx) - 50.0)
 
-        cm = (ps >= min_rx) & boundary_mask
+        cm        = (ps >= min_rx) & boundary_mask
+        gw_idx_2d = gw_idx_grid.reshape(lon2d.shape)
 
-        color_levels = self.settings.get('color_levels') if hasattr(self, 'settings') else None
-        url = self._render_heatmap_image(ps, cm, boundary_mask, min_rx, color_levels)
+        color_levels = self.settings.get('color_levels') \
+                       if hasattr(self, 'settings') else None
+        gw_color_map = self.settings.get('gw_color_map', {}) \
+                       if hasattr(self, 'settings') else {}
+
+        url = self._render_heatmap_gw_colors(
+            ps, cm, boundary_mask, min_rx,
+            gw_idx_2d, gws, gw_color_map, color_levels)
 
         if cb: cb(f"합성 히트맵 완료 ({len(gws)}개 GW)")
         return {
             'url'     : url,
-            'bounds'  : [[latmin, lmin], [latmax, lmax]],
+            'bounds'  : [[float(latmin), float(lmin)],
+                         [float(latmax), float(lmax)]],
             'callsign': 'COMBINED',
             'type'    : 'combined',
             'min_rx'  : min_rx,
             'ps'      : ps,
             'cm'      : cm,
-            'lon_min' : lmin,
-            'lat_min' : latmin,
+            'gw_idx'  : gw_idx_2d,
+            'lon_min' : float(lmin),
+            'lat_min' : float(latmin),
             'step'    : step,
         }
 
@@ -432,7 +462,7 @@ class CoverageEngine:
         tr = Transformer.from_crs('EPSG:4326', 'EPSG:3857', always_xy=True)
         px, py = tr.transform(fl, fa)
 
-        idx = np.where(mask)[0]
+        idx      = np.where(mask)[0]
         env_grid = np.zeros(len(px), dtype=np.uint8)
 
         if cb: cb(f"환경 분류 계산 중... ({len(idx)}개 포인트)")
@@ -441,7 +471,7 @@ class CoverageEngine:
             env_grid[i] = self.spatial.get_env_code(
                 float(px[i]), float(py[i]))
 
-        eg = env_grid.reshape(lon2d.shape)
+        eg            = env_grid.reshape(lon2d.shape)
         boundary_mask = mask.reshape(lon2d.shape)
 
         ENV_COLORS = {
@@ -465,20 +495,15 @@ class CoverageEngine:
         if cb: cb("환경 분류 시각화 완료")
         return {
             'url'     : url,
-            'bounds'  : [[latmin, lmin], [latmax, lmax]],
+            'bounds'  : [[float(latmin), float(lmin)],
+                         [float(latmax), float(lmax)]],
             'callsign': 'ENV_MAP',
             'type'    : 'env_map',
         }
 
     @staticmethod
     def _render_heatmap_image(ps, cm, boundary_mask, min_rx, color_levels=None):
-        """
-        ps            : 수신 전력 2D 배열
-        cm            : 커버리지 마스크 (bool 2D)
-        boundary_mask : 성남시 경계 마스크 (bool 2D)
-        min_rx        : 최소 수신 레벨 (dBm)
-        color_levels  : [{'pr': float, 'color': '#RRGGBB'}, ...] 내림차순 정렬
-        """
+        """단일 GW 히트맵 렌더링 (color_levels 기반 계단식 색상)."""
         import io, base64
         from PIL import Image
         import numpy as np
@@ -487,21 +512,17 @@ class CoverageEngine:
         rgba = np.zeros((rows, cols, 4), dtype=np.uint8)
 
         if color_levels:
-            # 내림차순 정렬 보장
             levels    = sorted(color_levels, key=lambda x: -x['pr'])
             pr_min    = float(levels[-1]['pr'])
             pr_max_lv = float(levels[0]['pr'])
 
             cm_display = cm & boundary_mask & (ps >= pr_min)
 
-            # 색상 배열 초기화
             r_arr    = np.zeros((rows, cols), dtype=np.uint8)
             g_arr    = np.zeros((rows, cols), dtype=np.uint8)
             b_arr    = np.zeros((rows, cols), dtype=np.uint8)
             assigned = np.zeros((rows, cols), dtype=bool)
 
-            # 낮은 레벨부터 높은 레벨 순으로 덮어쓰기
-            # (높은 dBm이 최종적으로 남도록 reversed)
             for lv in reversed(levels):
                 hx = lv['color'].lstrip('#')
                 rv, gv, bv = int(hx[0:2], 16), int(hx[2:4], 16), int(hx[4:6], 16)
@@ -511,7 +532,6 @@ class CoverageEngine:
                 b_arr[lv_mask] = bv
                 assigned[lv_mask] = True
 
-            # 알파: 신호 강도에 따라 0.5~0.85
             denom = max(pr_max_lv - pr_min, 1.0)
             alpha = np.where(
                 assigned,
@@ -525,7 +545,6 @@ class CoverageEngine:
             rgba[..., 3] = alpha
 
         else:
-            # color_levels 없으면 기존 jet 방식 fallback
             import matplotlib
             matplotlib.use('Agg')
             import matplotlib.pyplot as plt
@@ -545,7 +564,62 @@ class CoverageEngine:
 
         img = Image.fromarray(rgba[::-1, :, :], 'RGBA')
         w, h_img = img.size
-        img = img.resize((w * 2, h_img * 2), Image.BILINEAR)
+        img = img.resize((w * 4, h_img * 4), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, 'PNG', optimize=True)
+        return f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode()}"
+
+    @staticmethod
+    def _render_heatmap_gw_colors(ps, cm, boundary_mask, min_rx,
+                                   gw_idx_2d, gws, gw_color_map,
+                                   color_levels=None):
+        """GW별 고유 색상으로 합성 히트맵 렌더링."""
+        import io, base64
+        import numpy as np
+        from PIL import Image
+
+        GW_HEX_COLORS = [
+            '#e74c3c', '#3498db', '#2ecc71', '#9b59b6', '#e67e22',
+            '#c0392b', '#2980b9', '#27ae60', '#8e44ad', '#17a589',
+            '#e91e8c', '#5dade2', '#58d68d', '#f0e68c', '#2c3e50',
+        ]
+
+        if color_levels:
+            levels = sorted(color_levels, key=lambda x: -x['pr'])
+            pr_min = float(levels[-1]['pr'])
+        else:
+            pr_min = float(min_rx)
+
+        rows, cols = ps.shape
+        rgba       = np.zeros((rows, cols, 4), dtype=np.uint8)
+        cm_display = cm & boundary_mask & (ps >= pr_min)
+
+        for gi, gw in enumerate(gws):
+            gw_mask = cm_display & (gw_idx_2d == gi)
+            if not gw_mask.any():
+                continue
+
+            cs    = gw.callsign
+            hex_c = gw_color_map.get(cs, GW_HEX_COLORS[gi % len(GW_HEX_COLORS)])
+            hx    = hex_c.lstrip('#')
+            rv    = int(hx[0:2], 16)
+            gv    = int(hx[2:4], 16)
+            bv    = int(hx[4:6], 16)
+
+            ps_in_mask = ps[gw_mask]
+            pr_range   = max(float(ps_in_mask.max()) - pr_min, 1.0)
+            alpha_full = (0.45 + 0.40 * np.clip(
+                (ps - pr_min) / pr_range, 0, 1)) * 255
+            alpha_full = alpha_full.astype(np.uint8)
+
+            rgba[gw_mask, 0] = rv
+            rgba[gw_mask, 1] = gv
+            rgba[gw_mask, 2] = bv
+            rgba[gw_mask, 3] = alpha_full[gw_mask]
+
+        img = Image.fromarray(rgba[::-1, :, :], 'RGBA')
+        w, h_img = img.size
+        img = img.resize((w * 4, h_img * 4), Image.LANCZOS)
         buf = io.BytesIO()
         img.save(buf, 'PNG', optimize=True)
         return f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode()}"

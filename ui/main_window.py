@@ -35,6 +35,13 @@ QToolButton:checked {{
 }}
 """
 
+# GW별 히트맵 색상 팔레트 (hex)
+GW_HEX_COLORS = [
+    '#e74c3c', '#3498db', '#2ecc71', '#9b59b6', '#e67e22',
+    '#c0392b', '#2980b9', '#27ae60', '#8e44ad', '#17a589',
+    '#e91e8c', '#5dade2', '#58d68d', '#f0e68c', '#2c3e50',
+]
+
 
 class CoverageWorker(QObject):
     sig_done = pyqtSignal(object)
@@ -73,18 +80,18 @@ class HeatmapWorker(QObject):
         self.spatial  = spatial
         self.gws      = gws
         self.settings = settings
-        self.env, self.fc = env, fc
+        self.env      = env
+        self.fc       = fc
 
     def run(self):
         try:
             import numpy as np
-            import matplotlib.pyplot as plt
-            from scipy.ndimage import label as nd_label
             from core.coverage import CoverageEngine
 
-            eng    = CoverageEngine(self.spatial, self.env, self.fc, settings=self.settings)
+            eng    = CoverageEngine(self.spatial, self.env, self.fc,
+                                    settings=self.settings)
             min_rx = self.settings.get('min_rx', -126.6)
-            step = float(self.settings.get('heatmap_step', 0.0015))
+            step   = float(self.settings.get('heatmap_step', 0.0015))
 
             color_levels = self.settings.get('color_levels', [
                 {'pr': -90,  'color': '#FF2020'},
@@ -105,27 +112,25 @@ class HeatmapWorker(QObject):
             hms = []
 
             if len(self.gws) > 1:
-                # ── 여러 GW → 합성 히트맵 (최대 Pr 기준) ────────────
                 self.sig_log.emit(
                     f"{len(self.gws)}개 GW 합성 히트맵 계산 중...")
+                pr_min = min((lv['pr'] for lv in color_levels), default=None)
                 hm = eng.heatmap_combined(
                     self.gws, min_rx, step=step,
                     cb=self.sig_log.emit,
-                    pr_min=self.settings.get('pr_min'),
-                    pr_max=self.settings.get('pr_max'))
+                    pr_min=pr_min)
 
-                # 등고선 계산
-                ps  = hm.get('ps')
-                cm  = hm.get('cm')
+                ps = hm.get('ps')
+                cm = hm.get('cm')
                 contours = []
 
                 if ps is not None and cm is not None:
-                    lmin    = hm.get('lon_min', 0)
-                    latmin  = hm.get('lat_min', 0)
-                    lon_ax  = np.linspace(lmin,
+                    lmin   = hm.get('lon_min', 0)
+                    latmin = hm.get('lat_min', 0)
+                    lon_ax = np.linspace(lmin,
                                         lmin + step * ps.shape[1],
                                         ps.shape[1])
-                    lat_ax  = np.linspace(latmin,
+                    lat_ax = np.linspace(latmin,
                                         latmin + step * ps.shape[0],
                                         ps.shape[0])
                     pr_m     = np.where(cm, ps, np.nan)
@@ -139,15 +144,12 @@ class HeatmapWorker(QObject):
                             pv = float(lv['pr'])
                             if pv < pr_min_in or pv > pr_max_in:
                                 continue
-                            try:
-                                fig, ax = plt.subplots()
-                                cs = ax.contour(lon_ax, lat_ax, pr_m, levels=[pv])
-                                plt.close(fig)
-                            except Exception:
-                                plt.close('all')
+                            allsegs = _calc_contour_segments(
+                                lon_ax, lat_ax, pr_m, pv)
+                            if not allsegs:
                                 continue
                             segs, lpts = [], []
-                            for col_segs in cs.allsegs:
+                            for col_segs in allsegs:
                                 for seg in col_segs:
                                     if len(seg) < 4:
                                         continue
@@ -156,7 +158,7 @@ class HeatmapWorker(QObject):
                                             (d**2).sum(axis=1)).sum()) < step:
                                         continue
                                     pts = [[float(p[1]), float(p[0])]
-                                        for p in seg]
+                                           for p in seg]
                                     segs.append(pts)
                                     mid = len(pts) // 2
                                     lpts.append({
@@ -173,22 +175,17 @@ class HeatmapWorker(QObject):
                                     'label_pts': lpts,
                                 })
 
-                        # SF별 등고선
                         sf_layers = []
                         for sf, sens in SF_SENS.items():
                             if not (ps[cm] >= sens).any():
                                 continue
-                            pr_sf = np.where(cm, ps, np.nan)
-                            try:
-                                fig, ax = plt.subplots()
-                                cs_sf = ax.contour(
-                                    lon_ax, lat_ax, pr_sf, levels=[sens])
-                                plt.close(fig)
-                            except Exception:
-                                plt.close('all')
+                            pr_sf      = np.where(cm, ps, np.nan)
+                            allsegs_sf = _calc_contour_segments(
+                                lon_ax, lat_ax, pr_sf, sens)
+                            if not allsegs_sf:
                                 continue
                             segs_sf = []
-                            for col_segs in cs_sf.allsegs:
+                            for col_segs in allsegs_sf:
                                 for seg in col_segs:
                                     if len(seg) < 4:
                                         continue
@@ -198,7 +195,7 @@ class HeatmapWorker(QObject):
                                         continue
                                     segs_sf.append(
                                         [[float(p[1]), float(p[0])]
-                                        for p in seg])
+                                         for p in seg])
                             if segs_sf:
                                 sf_layers.append({
                                     'sf'      : sf,
@@ -212,14 +209,12 @@ class HeatmapWorker(QObject):
                 hms.append(hm)
 
             else:
-                # ── 단일 GW → 개별 히트맵 ────────────────────────────
                 for gw in self.gws:
                     self.sig_log.emit(f"{gw.callsign} 히트맵 계산 중...")
-                    use_deygout = self.settings.get('heatmap_diff', False)
+                    pr_min = min((lv['pr'] for lv in color_levels), default=None)
                     hm = eng.heatmap(gw, min_rx, step=step,
-                                    cb=self.sig_log.emit,
-                                    pr_min=self.settings.get('pr_min'),
-                                    pr_max=self.settings.get('pr_max'))
+                                     cb=self.sig_log.emit,
+                                     pr_min=pr_min)
 
                     ps = hm.get('ps')
                     cm = hm.get('cm')
@@ -229,11 +224,11 @@ class HeatmapWorker(QObject):
                         lmin   = hm.get('lon_min', 0)
                         latmin = hm.get('lat_min', 0)
                         lon_ax = np.linspace(lmin,
-                                            lmin + step * ps.shape[1],
-                                            ps.shape[1])
+                                             lmin + step * ps.shape[1],
+                                             ps.shape[1])
                         lat_ax = np.linspace(latmin,
-                                            latmin + step * ps.shape[0],
-                                            ps.shape[0])
+                                             latmin + step * ps.shape[0],
+                                             ps.shape[0])
                         pr_m     = np.where(cm, ps, np.nan)
                         ps_in_cm = ps[cm]
 
@@ -245,16 +240,12 @@ class HeatmapWorker(QObject):
                                 pv = float(lv['pr'])
                                 if pv < pr_min_in or pv > pr_max_in:
                                     continue
-                                try:
-                                    fig, ax = plt.subplots()
-                                    cs = ax.contour(
-                                        lon_ax, lat_ax, pr_m, levels=[pv])
-                                    plt.close(fig)
-                                except Exception:
-                                    plt.close('all')
+                                allsegs = _calc_contour_segments(
+                                    lon_ax, lat_ax, pr_m, pv)
+                                if not allsegs:
                                     continue
                                 segs, lpts = [], []
-                                for col_segs in cs.allsegs:
+                                for col_segs in allsegs:
                                     for seg in col_segs:
                                         if len(seg) < 4:
                                             continue
@@ -263,7 +254,7 @@ class HeatmapWorker(QObject):
                                                 (d**2).sum(axis=1)).sum()) < step:
                                             continue
                                         pts = [[float(p[1]), float(p[0])]
-                                            for p in seg]
+                                               for p in seg]
                                         segs.append(pts)
                                         mid = len(pts) // 2
                                         lpts.append({
@@ -284,17 +275,13 @@ class HeatmapWorker(QObject):
                             for sf, sens in SF_SENS.items():
                                 if not (ps[cm] >= sens).any():
                                     continue
-                                pr_sf = np.where(cm, ps, np.nan)
-                                try:
-                                    fig, ax = plt.subplots()
-                                    cs_sf = ax.contour(
-                                        lon_ax, lat_ax, pr_sf, levels=[sens])
-                                    plt.close(fig)
-                                except Exception:
-                                    plt.close('all')
+                                pr_sf      = np.where(cm, ps, np.nan)
+                                allsegs_sf = _calc_contour_segments(
+                                    lon_ax, lat_ax, pr_sf, sens)
+                                if not allsegs_sf:
                                     continue
                                 segs_sf = []
-                                for col_segs in cs_sf.allsegs:
+                                for col_segs in allsegs_sf:
                                     for seg in col_segs:
                                         if len(seg) < 4:
                                             continue
@@ -304,7 +291,7 @@ class HeatmapWorker(QObject):
                                             continue
                                         segs_sf.append(
                                             [[float(p[1]), float(p[0])]
-                                            for p in seg])
+                                             for p in seg])
                                 if segs_sf:
                                     sf_layers.append({
                                         'sf'      : sf,
@@ -324,6 +311,22 @@ class HeatmapWorker(QObject):
             self.sig_err.emit(traceback.format_exc())
 
 
+def _calc_contour_segments(lon_ax, lat_ax, pr_m, level):
+    """스레드 안전한 등고선 계산."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    fig = plt.figure()
+    ax  = fig.add_subplot(111)
+    try:
+        cs = ax.contour(lon_ax, lat_ax, pr_m, levels=[level])
+        return cs.allsegs
+    except Exception:
+        return []
+    finally:
+        plt.close(fig)
+
+
 class MainWindow(QMainWindow):
     def __init__(self, shp_path, dem_path):
         super().__init__()
@@ -333,21 +336,20 @@ class MainWindow(QMainWindow):
                          int(geo.width()*0.94), int(geo.height()*0.94))
         self.setStyleSheet(f"QMainWindow{{background:{DARK};}}")
 
-        self.spatial     = None
-        self._thread     = None
-        self._cov_thread = None
-        self._cov_worker = None
-        self._legend_levels = None   # None이면 기본값 사용
+        self.spatial        = None
+        self._thread        = None
+        self._cov_thread    = None
+        self._cov_worker    = None
+        self._legend_levels = None
         self._legend_win    = None
-        self._result     = None
-        self._heatmaps   = []
-        self._shp        = shp_path
-        self._dem        = dem_path
-        self._gw_win     = None
-        self._node_win   = None
-        self._opt_win    = None
+        self._result        = None
+        self._heatmaps      = []
+        self._shp           = shp_path
+        self._dem           = dem_path
+        self._gw_win        = None
+        self._node_win      = None
+        self._opt_win       = None
 
-        # 설정 로드
         from ui.settings_window import load_settings
         self._settings = load_settings()
 
@@ -361,14 +363,14 @@ class MainWindow(QMainWindow):
         tb.setStyleSheet(TOOLBAR_STYLE)
         self.addToolBar(Qt.TopToolBarArea, tb)
 
-        act_gw   = QAction("📡  GW 목록",      self)
-        act_node = QAction("📶  단말 목록",     self)
-        act_opt  = QAction("⚙   GW 최적 배치", self)
-        act_legend = QAction("🎨  범례 설정", self)
-        act_cfg  = QAction("🔧  설정",          self)
-        act_dist = QAction("📏  거리 측정", self, checkable=True)
-        act_save = QAction("💾  결과 저장",     self)
-        act_load = QAction("📂  결과 불러오기", self)
+        act_gw     = QAction("📡  GW 목록",      self)
+        act_node   = QAction("📶  단말 목록",     self)
+        act_opt    = QAction("⚙   GW 최적 배치", self)
+        act_legend = QAction("🎨  범례 설정",     self)
+        act_cfg    = QAction("🔧  설정",           self)
+        act_dist   = QAction("📏  거리 측정", self, checkable=True)
+        act_save   = QAction("💾  결과 저장",      self)
+        act_load   = QAction("📂  결과 불러오기",  self)
 
         for a in [act_gw, act_node, act_opt, act_legend, act_cfg,
                   act_dist, act_save, act_load]:
@@ -379,16 +381,15 @@ class MainWindow(QMainWindow):
         act_opt.triggered.connect(self._open_optimize)
         act_legend.triggered.connect(self._open_legend)
         act_dist.triggered.connect(self._toggle_measure)
-        self._measuring = False
+        self._measuring   = False
         self._measure_pts = []
         act_cfg.triggered.connect(self._open_settings)
         act_save.triggered.connect(self._save_result)
         act_load.triggered.connect(self._load_result)
 
-        # 중앙: 지도(좌) + 결과 패널(우) 분할
         from PyQt5.QtWidgets import QSplitter
         splitter = QSplitter(Qt.Horizontal)
-        self.map_w      = MapWidget()
+        self.map_w        = MapWidget()
         self.result_panel = ResultPanel()
         self.result_panel.setMaximumWidth(260)
         self.result_panel.setMinimumWidth(200)
@@ -439,7 +440,6 @@ class MainWindow(QMainWindow):
 
     def _on_settings_changed(self, settings: dict):
         self._settings = settings
-        # 지도 타일 변경 시 지도 새로고침
         self._refresh_map()
         self.status.showMessage("설정이 적용되었습니다.")
 
@@ -473,12 +473,10 @@ class MainWindow(QMainWindow):
             self._settings['pr_min'] = min(lv['pr'] for lv in levels)
             self._settings['pr_max'] = max(lv['pr'] for lv in levels)
 
-        # 히트맵 표시 중이면 즉시 재계산
         if self._heatmaps and self._gw_win:
             gws = [g for g in self._gw_win.get_gws() if g.enabled]
             if gws:
                 self.status.showMessage("범례 변경 — 히트맵 재계산 중...")
-                # gw_list_window settings 대신 _settings 직접 전달
                 self._run_heatmap(gws, {})
                 return
 
@@ -494,9 +492,16 @@ class MainWindow(QMainWindow):
         if not nodes:
             self.status.showMessage("단말기를 먼저 추가하세요."); return
 
-        if self._cov_thread and self._cov_thread.isRunning():
-            self._cov_thread.quit()
-            self._cov_thread.wait(2000)
+        # ── 이전 스레드 안전하게 종료 ────────────────────────────
+        try:
+            if self._cov_thread and self._cov_thread.isRunning():
+                self._cov_thread.quit()
+                self._cov_thread.wait(2000)
+        except RuntimeError:
+            pass  # 이미 삭제된 경우 무시
+        finally:
+            self._cov_thread = None
+            self._cov_worker = None
 
         self.status.showMessage(
             f"커버리지 분석 중: GW {len(gws)}개 × Node {len(nodes)}개...")
@@ -506,9 +511,10 @@ class MainWindow(QMainWindow):
         w.moveToThread(t)
         t.started.connect(w.run)
         w.sig_done.connect(self._on_coverage_done)
-        w.sig_done.connect(t.quit)   # ← 추가
-        w.sig_err.connect(t.quit)    # ← 추가
+        w.sig_done.connect(t.quit)
+        w.sig_err.connect(t.quit)
         w.sig_err.connect(lambda m: print(f"[COV ERR] {m}"))
+        # deleteLater 제거 → 수동으로 참조 유지
         self._cov_worker = w
         self._cov_thread = t
         t.start()
@@ -524,17 +530,15 @@ class MainWindow(QMainWindow):
             heatmaps=self._heatmaps,
             selected_gws=sel)
         self.result_panel.update_result(result, gws)
-
-        # ── 추가: Node 목록 창 갱신 ──────────────────────────
         if self._node_win:
             self._node_win.update_result(result)
-
         pct = result.coverage_pct
         self.lbl.setText(
             f"커버리지: {result.n_covered}/{result.n_total} ({pct:.1f}%)")
         self.status.showMessage(f"커버리지 분석 완료: {pct:.1f}%")
 
-    # ── 지도 갱신 ───────────────────────────────────────────
+    # ── 지도 갱신 ────────────────────────────────────────────
+
     def _refresh_map(self):
         gws   = self._gw_win.get_gws()    if self._gw_win   else []
         nodes = self._node_win.get_nodes() if self._node_win else []
@@ -578,7 +582,6 @@ class MainWindow(QMainWindow):
                 self._gw_win._refresh_table(suppress_map=True)
                 self.status.showMessage(
                     f"{callsign} 이동 → ({lat:.6f}, {lon:.6f})")
-                # 드래그 완료 시 자동 커버리지 재계산
                 self._run_coverage(gws)
                 break
 
@@ -598,7 +601,7 @@ class MainWindow(QMainWindow):
                     f"{callsign} 이동 → ({lat:.6f}, {lon:.6f})")
                 break
 
-    # ── 우클릭 컨텍스트 메뉴 ─────────────────────────────────
+    # ── 우클릭 컨텍스트 메뉴 ────────────────────────────────
 
     def _on_map_right_clicked(self, lon: float, lat: float):
         from PyQt5.QtWidgets import QMenu
@@ -636,7 +639,7 @@ class MainWindow(QMainWindow):
             n  = len(self._gw_win._gws) + 1
             gw = GWEntry(
                 callsign = f"GW{n}",
-                lon      = lon, lat = lat,
+                lon=lon, lat=lat,
                 pt_dbm   = s.get('gw_pt_dbm', 14.0),
                 gt_dbi   = s.get('gw_gt_dbi', 2.15),
                 lt_db    = s.get('gw_lt_db',  0.0),
@@ -655,7 +658,7 @@ class MainWindow(QMainWindow):
             n  = len(self._node_win._nodes) + 1
             nd = NodeEntry(
                 callsign       = f"Node{n}",
-                lon            = lon, lat = lat,
+                lon=lon, lat=lat,
                 gr_dbi         = s.get('nd_gr_dbi', 2.15),
                 lr_db          = s.get('nd_lr_db',  0.0),
                 hm_m           = s.get('nd_hm_m',   1.5),
@@ -668,36 +671,53 @@ class MainWindow(QMainWindow):
             self.status.showMessage(f"Node{n} 추가 → ({lat:.5f}, {lon:.5f})")
 
     # ── 히트맵 ──────────────────────────────────────────────
-
     def _start_worker(self, worker):
-        if self._thread and self._thread.isRunning():
-            self._thread.quit()
-            self._thread.wait(2000)
+        try:
+            if self._thread and self._thread.isRunning():
+                self._thread.quit()
+                self._thread.wait(2000)
+        except RuntimeError:
+            pass
+        finally:
+            self._thread = None
+
         t = QThread()
         self._thread = t
+        self._worker = worker
         worker.moveToThread(t)
         t.started.connect(worker.run)
         worker.sig_log.connect(lambda msg: self.status.showMessage(msg))
         worker.sig_err.connect(self._on_error)
         worker.sig_err.connect(lambda m: print(f"[ERROR] {m}"))
-        self._worker = worker
+        worker.sig_done.connect(t.quit)
+        worker.sig_err.connect(t.quit)
+        # t.finished.connect(t.deleteLater) ← 제거
         t.start()
 
     def _run_heatmap(self, gws, settings):
         if self.spatial is None:
             self.status.showMessage("공간 데이터 로드 중..."); return
 
-        merged = dict(self._settings)   # ← settings 파라미터 대신 _settings 기준으로
-        merged.update(settings)         # ← gw_list_window settings로 덮어쓰되
-        # color_levels는 항상 _settings 기준 (범례 설정값 우선)
+        merged = dict(self._settings)
+        merged.update(settings)
         if self._legend_levels:
             merged['color_levels'] = self._legend_levels
         if 'color_levels' in self._settings:
             merged['color_levels'] = self._settings['color_levels']
 
+        # ── GW별 히트맵 색상 맵 생성 ─────────────────────────
+        active_gws = [g for g in gws if g.enabled]
+        merged['gw_color_map'] = {
+            g.callsign: GW_HEX_COLORS[i % len(GW_HEX_COLORS)]
+            for i, g in enumerate(active_gws)
+        }
+
+        env = merged.get('env', 2) or 2
+        fc  = merged.get('fc_mhz', 915.0)
+
         self.status.showMessage(
             f"히트맵 계산 중: {', '.join(g.callsign for g in gws)}")
-        w = HeatmapWorker(self.spatial, gws, merged)
+        w = HeatmapWorker(self.spatial, gws, merged, env=env, fc=fc)
         w.sig_done.connect(self._on_heatmap_done)
         self._start_worker(w)
 
@@ -714,11 +734,10 @@ class MainWindow(QMainWindow):
         self.lbl.setText(f"히트맵: {', '.join(sel)}")
         self.status.showMessage(f"히트맵 완료: {', '.join(sel)}")
 
-        # ── 히트맵 완료 후 커버리지 자동 실행 ──────────────────
+        # 히트맵 완료 후 커버리지 자동 실행
         active_gws = [g for g in gws if g.enabled]
         if active_gws and nodes:
-            self.status.showMessage(
-                f"히트맵 완료 — 커버리지 분석 자동 시작...")
+            self.status.showMessage("히트맵 완료 — 커버리지 분석 자동 시작...")
             self._run_coverage(active_gws)
 
     # ── 최적 배치 결과 ───────────────────────────────────────
@@ -771,22 +790,17 @@ class MainWindow(QMainWindow):
         self.lbl.setText(
             f"최적 배치: GW {result.num_gw}개 | 커버리지 {pct:.1f}%")
         self.status.showMessage(
-            f"GW 최적 배치 완료 — GW {result.num_gw}개 | {pct:.1f}% 커버")
-
-        # 배치 완료 후 커버리지 자동 실행
-        self.status.showMessage(
             f"GW 최적 배치 완료 — 커버리지 분석 자동 시작...")
         self._run_coverage(opt_gws)
 
     def _toggle_measure(self, checked):
-        self._measuring = checked
+        self._measuring   = checked
         self._measure_pts = []
         if checked:
             self.status.showMessage(
                 "거리 측정 모드: 지도에서 클릭하세요. "
                 "여러 점 연속 측정 가능 | 종료: 버튼 다시 클릭")
         else:
-            # 측정 종료 시 선 제거
             self._refresh_map()
             self.status.showMessage("거리 측정 모드 종료")
 
@@ -799,19 +813,15 @@ class MainWindow(QMainWindow):
                 self.status.showMessage(
                     f"P1: ({lat:.5f}, {lon:.5f}) — 다음 점을 클릭하세요.")
             else:
-                # 마지막 두 점 간 거리/방위각 계산
                 from core.utils import haversine, bearing
-                p1 = self._measure_pts[-2]
-                p2 = self._measure_pts[-1]
+                p1   = self._measure_pts[-2]
+                p2   = self._measure_pts[-1]
                 dist = haversine(p1[0], p1[1], p2[0], p2[1])
                 brg  = bearing(p1[0], p1[1], p2[0], p2[1])
-
-                # 전체 누적 거리
                 total = sum(
                     haversine(self._measure_pts[i][0], self._measure_pts[i][1],
-                            self._measure_pts[i+1][0], self._measure_pts[i+1][1])
+                              self._measure_pts[i+1][0], self._measure_pts[i+1][1])
                     for i in range(len(self._measure_pts)-1))
-
                 self.status.showMessage(
                     f"P{n}: ({lat:.5f}, {lon:.5f}) | "
                     f"구간: {dist:.3f}km / {brg:.1f}° | "
@@ -819,7 +829,6 @@ class MainWindow(QMainWindow):
                 self.lbl.setText(
                     f"📏 구간 {dist:.3f}km | 누적 {total:.3f}km | {brg:.1f}°")
 
-            # 지도에 측정선 즉시 반영
             gws   = self._gw_win.get_gws()    if self._gw_win   else []
             nodes = self._node_win.get_nodes() if self._node_win else []
             tile  = self._settings.get('map_tile', 'CartoDB Voyager')
@@ -842,11 +851,9 @@ class MainWindow(QMainWindow):
     # ── 공통 ────────────────────────────────────────────────
 
     def _save_result(self):
-        """현재 커버리지 분석 결과와 GW/Node를 JSON으로 저장."""
         import json
         from PyQt5.QtWidgets import QFileDialog
 
-        # numpy/bool 타입을 Python 기본 타입으로 변환하는 인코더
         class _Enc(json.JSONEncoder):
             def default(self, o):
                 import numpy as np
@@ -895,7 +902,6 @@ class MainWindow(QMainWindow):
         self.status.showMessage(f"결과 저장 완료: {path}")
 
     def _load_result(self):
-        """저장된 JSON에서 GW/Node/결과 불러오기."""
         import json
         from PyQt5.QtWidgets import QFileDialog
         from core.coverage import GWEntry, NodeEntry, CoverageResult, LinkResult
@@ -906,7 +912,6 @@ class MainWindow(QMainWindow):
             with open(path, encoding='utf-8') as f:
                 data = json.load(f)
 
-            # GW 복원
             if self._gw_win is None:
                 self._gw_win = GWListWindow(self)
                 self._gw_win.sig_coverage_requested.connect(self._run_heatmap)
@@ -916,26 +921,24 @@ class MainWindow(QMainWindow):
             self._gw_win._gws = [GWEntry(**g) for g in data.get('gws', [])]
             self._gw_win._refresh_table(suppress_map=True)
 
-            # Node 복원
             if self._node_win is None:
                 self._node_win = NodeListWindow(self)
                 self._node_win.sig_map_refresh.connect(self._refresh_map)
             self._node_win._nodes = [NodeEntry(**n) for n in data.get('nodes', [])]
             self._node_win._refresh_table(suppress_map=True)
 
-            # 결과 복원
             r_data = data.get('result', {})
             result = CoverageResult(
-                n_covered  = r_data.get('n_covered', 0),
-                n_total    = r_data.get('n_total', 0),
-                gw_counts  = r_data.get('gw_counts', {}),
+                n_covered = r_data.get('n_covered', 0),
+                n_total   = r_data.get('n_total', 0),
+                gw_counts = r_data.get('gw_counts', {}),
             )
             for nd in r_data.get('nodes', []):
                 result.nodes.append(LinkResult(
-                    covered  = nd.get('covered', False),
-                    best_gw  = nd.get('best_gw', ''),
-                    best_pr  = nd.get('best_pr', -999.0),
-                    gw_prs   = nd.get('gw_prs', {}),
+                    covered = nd.get('covered', False),
+                    best_gw = nd.get('best_gw', ''),
+                    best_pr = nd.get('best_pr', -999.0),
+                    gw_prs  = nd.get('gw_prs', {}),
                 ))
             self._result = result
 
@@ -986,9 +989,9 @@ class MainWindow(QMainWindow):
         nodes = self._node_win.get_nodes() if self._node_win else []
         tile  = self._settings.get('map_tile', 'CartoDB Voyager')
         self.map_w.refresh(gws=gws, nodes=nodes,
-                        result=self._result,
-                        heatmaps=[hm],
-                        selected_gws=[], map_tile=tile)
+                           result=self._result,
+                           heatmaps=[hm],
+                           selected_gws=[], map_tile=tile)
         self.status.showMessage(
             "환경 분류 지도 완료 | "
             "🔴 Dense Urban  🟠 Urban  🟡 Suburban  🟢 Open")

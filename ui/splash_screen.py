@@ -1,13 +1,15 @@
 # ui/splash_screen.py
 from __future__ import annotations
+import os
 from PyQt5.QtWidgets import QWidget, QApplication, QPushButton, QLabel
-from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QPropertyAnimation, QEasingCurve, QRect
-from PyQt5.QtGui import QPainter, QColor, QFont, QPen, QLinearGradient, QPixmap, QBrush
+from PyQt5.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve
+from PyQt5.QtGui import QPainter, QColor, QFont, QPen, QLinearGradient, QPixmap, QPainterPath
 
 
-def _draw_background(p: QPainter, w: int, h: int):
-    """배경 + 지도 패널 + GW 포인트 그리기."""
-    # 배경
+def _draw_background(p: QPainter, w: int, h: int, assets_dir: str = ""):
+    """배경 + 세계 지도 이미지 + 텍스트 그리기."""
+
+    # ── 배경 ─────────────────────────────────────────────────
     bg = QLinearGradient(0, 0, 0, h)
     bg.setColorAt(0.0, QColor("#0d1117"))
     bg.setColorAt(1.0, QColor("#161b27"))
@@ -16,93 +18,107 @@ def _draw_background(p: QPainter, w: int, h: int):
     p.drawRect(0, 0, w, h)
 
     # 테두리
-    pen = QPen(QColor("#2a2f3b"))
-    pen.setWidth(2)
-    p.setPen(pen)
+    p.setPen(QPen(QColor("#2a2f3b"), 2))
     p.setBrush(Qt.NoBrush)
     p.drawRoundedRect(1, 1, w-2, h-2, 16, 16)
 
-    # 지도 패널
-    MAP_X, MAP_Y = 40, 110
-    MAP_W, MAP_H = w - 80, h - 230
+    # ── 지도 패널 영역 ───────────────────────────────────────
+    MAP_X, MAP_Y = 40, 100
+    MAP_W, MAP_H = w - 80, h - 200
 
-    map_bg = QLinearGradient(MAP_X, MAP_Y, MAP_X, MAP_Y + MAP_H)
-    map_bg.setColorAt(0.0, QColor("#1a2035"))
-    map_bg.setColorAt(1.0, QColor("#131929"))
-    p.setBrush(map_bg)
-    p.setPen(QPen(QColor("#2a3550"), 1))
-    p.drawRoundedRect(MAP_X, MAP_Y, MAP_W, MAP_H, 10, 10)
+    # 패널 배경 (이미지 로드 실패 시 폴백)
+    p.setBrush(QColor("#0a1628"))
+    p.setPen(QPen(QColor("#1e3050"), 1))
+    p.drawRoundedRect(MAP_X, MAP_Y, MAP_W, MAP_H, 8, 8)
 
-    # 격자선
-    p.setPen(QPen(QColor("#1e2840"), 1))
-    for i in range(1, 9):
-        x = MAP_X + MAP_W * i // 9
-        p.drawLine(x, MAP_Y, x, MAP_Y + MAP_H)
-    for i in range(1, 5):
-        y = MAP_Y + MAP_H * i // 5
-        p.drawLine(MAP_X, y, MAP_X + MAP_W, y)
-
-    # 대륙 실루엣
-    p.setPen(Qt.NoPen)
-    continents = [
-        (0.42, 0.15, 0.10, 0.55),  # 유럽/아프리카
-        (0.52, 0.10, 0.22, 0.45),  # 아시아
-        (0.10, 0.10, 0.18, 0.40),  # 북미
-        (0.18, 0.50, 0.10, 0.35),  # 남미
-        (0.70, 0.55, 0.10, 0.25),  # 호주
+    # ── 세계 지도 이미지 로드 ────────────────────────────────
+    _base = os.path.dirname(os.path.abspath(__file__))
+    img_candidates = [
+        os.path.join(assets_dir, 'world_map.png'),
+        os.path.join(_base, '..', 'assets',   'world_map.png'),
+        os.path.join(_base, 'world_map.png'),
+        os.path.join(_base, '..', 'data', 'world_map.png'),
     ]
-    for rx, ry, rw, rh in continents:
-        p.setBrush(QColor("#1e3a2a"))
-        p.drawEllipse(
-            MAP_X + int(MAP_W * rx), MAP_Y + int(MAP_H * ry),
-            int(MAP_W * rw), int(MAP_H * rh))
+    world_map_px = None
+    for path in img_candidates:
+        if os.path.exists(path):
+            world_map_px = QPixmap(path)
+            break
 
-    # GW 포인트 + 신호 원
+    if world_map_px and not world_map_px.isNull():
+        scaled = world_map_px.scaled(
+            MAP_W, MAP_H,
+            Qt.KeepAspectRatioByExpanding,
+            Qt.SmoothTransformation
+        )
+        crop_x = (scaled.width()  - MAP_W) // 2
+        crop_y = (scaled.height() - MAP_H) // 2
+        cropped = scaled.copy(crop_x, crop_y, MAP_W, MAP_H)
+
+        p.save()
+        clip_path = QPainterPath()
+        clip_path.addRoundedRect(MAP_X, MAP_Y, MAP_W, MAP_H, 8, 8)
+        p.setClipPath(clip_path)
+        p.drawPixmap(MAP_X, MAP_Y, cropped)
+        p.restore()
+
+        # 패널 테두리 다시 그리기
+        p.setBrush(Qt.NoBrush)
+        p.setPen(QPen(QColor("#2a4a6a"), 1))
+        p.drawRoundedRect(MAP_X, MAP_Y, MAP_W, MAP_H, 8, 8)
+
+    # ── GW 포인트 오버레이 ───────────────────────────────────
     gw_points = [
-        (0.55, 0.25), (0.62, 0.30), (0.58, 0.45),
-        (0.20, 0.20), (0.72, 0.60), (0.45, 0.50),
+        (0.55, 0.25), (0.62, 0.30), (0.20, 0.18),
+        (0.72, 0.55), (0.45, 0.48), (0.15, 0.52),
     ]
-    pts_px = []
     for rx, ry in gw_points:
         cx = MAP_X + int(MAP_W * rx)
         cy = MAP_Y + int(MAP_H * ry)
-        pts_px.append((cx, cy))
-        for radius, alpha in [(22, 25), (14, 55), (7, 110)]:
-            c = QColor("#4f8ef7"); c.setAlpha(alpha)
-            p.setBrush(c); p.setPen(Qt.NoPen)
+        for radius, alpha in [(20, 18), (13, 45), (6, 110)]:
+            c = QColor("#4f8ef7")
+            c.setAlpha(alpha)
+            p.setBrush(c)
+            p.setPen(Qt.NoPen)
             p.drawEllipse(cx-radius, cy-radius, radius*2, radius*2)
         p.setBrush(QColor("#7ab8e8"))
+        p.setPen(Qt.NoPen)
         p.drawEllipse(cx-3, cy-3, 6, 6)
 
     # 연결선
-    p.setPen(QPen(QColor(79, 142, 247, 50), 1))
+    pts_px = [(MAP_X + int(MAP_W*rx), MAP_Y + int(MAP_H*ry))
+              for rx, ry in gw_points]
+    p.setPen(QPen(QColor(79, 142, 247, 35), 1))
     for i in range(len(pts_px)):
         for j in range(i+1, len(pts_px)):
             p.drawLine(pts_px[i][0], pts_px[i][1],
                        pts_px[j][0], pts_px[j][1])
 
-    # 제목
-    p.setPen(QColor("#7a8099"))
-    p.setFont(QFont("Segoe UI", 15))
-    p.drawText(0, 20, w, 28, Qt.AlignHCenter,
+    # ── 제목 텍스트 ──────────────────────────────────────────
+    p.setRenderHint(QPainter.TextAntialiasing)
+
+    # SmartCity LoRaWAN Network Simulator
+    p.setPen(QColor("#a0b4cc"))
+    p.setFont(QFont("Segoe UI", 17, QFont.Normal))
+    p.drawText(0, 18, w, 34, Qt.AlignHCenter,
                "SmartCity LoRaWAN Network Simulator")
 
     # LoRaScape
-    p.setFont(QFont("Segoe UI", 34, QFont.Bold))
-    grad_text = QLinearGradient(w//2-150, 50, w//2+150, 85)
+    p.setFont(QFont("Segoe UI", 24, QFont.Bold))
+    grad_text = QLinearGradient(w//2-120, 52, w//2+120, 78)
     grad_text.setColorAt(0.0, QColor("#4f8ef7"))
     grad_text.setColorAt(1.0, QColor("#7ab8e8"))
     p.setPen(QPen(grad_text, 0))
-    p.drawText(0, 48, w, 52, Qt.AlignHCenter, "LoRaScape")
+    p.drawText(0, 52, w, 42, Qt.AlignHCenter, "LoRaScape")
 
-    # 버전 — 왼쪽 상단
+    # ── 버전 — 왼쪽 상단 ────────────────────────────────────
     p.setFont(QFont("Segoe UI", 8))
     p.setPen(QColor("#3a4060"))
     p.drawText(14, 10, 80, 14, Qt.AlignLeft, "v1.0.0")
 
-    # SOLUWINS 로고 — 오른쪽 하단
+    # ── SOLUWINS 로고 — 오른쪽 하단 ─────────────────────────
     LOGO_Y = h - 42
-    icon_x = w - 160   # 오른쪽 정렬
+    icon_x = w - 160
     icon_y = LOGO_Y + 4
     p.setPen(Qt.NoPen)
     p.setBrush(QColor("#1a6fc4"))
@@ -118,10 +134,11 @@ def _draw_background(p: QPainter, w: int, h: int):
 
 
 class SplashScreen(QWidget):
-    sig_start = pyqtSignal()   # START 버튼 클릭 시 메인창 열기 신호
+    sig_start = pyqtSignal()
 
-    def __init__(self):
+    def __init__(self, assests_dir: str = ""):
         super().__init__()
+        self._assets_dir = assests_dir
         self.setWindowFlags(
             Qt.FramelessWindowHint |
             Qt.WindowStaysOnTopHint |
@@ -130,7 +147,6 @@ class SplashScreen(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setFixedSize(900, 560)
 
-        # 화면 중앙 배치
         screen = QApplication.primaryScreen().availableGeometry()
         self.move(
             (screen.width()  - self.width())  // 2,
@@ -139,7 +155,7 @@ class SplashScreen(QWidget):
 
         self._build()
 
-        # 페이드인 애니메이션
+        # 페이드인
         self.setWindowOpacity(0.0)
         self._anim = QPropertyAnimation(self, b"windowOpacity")
         self._anim.setDuration(600)
@@ -149,13 +165,14 @@ class SplashScreen(QWidget):
         self._anim.start()
 
     def _build(self):
-        W, H = 900, 560
-        MAP_Y = 110; MAP_H = H - 230
+        W, H   = 900, 560
+        MAP_Y  = 100
+        MAP_H  = H - 200
 
         # START 버튼
         self.btn_start = QPushButton("▶  START", self)
         self.btn_start.setFixedSize(200, 48)
-        self.btn_start.move((W - 200) // 2, MAP_Y + MAP_H + 20)
+        self.btn_start.move((W - 200) // 2, MAP_Y + MAP_H + 16)
         self.btn_start.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(
@@ -185,17 +202,15 @@ class SplashScreen(QWidget):
         # 안내 텍스트
         self.lbl_hint = QLabel("Click START to launch the simulator", self)
         self.lbl_hint.setFixedWidth(W)
-        self.lbl_hint.move(0, MAP_Y + MAP_H + 76)
+        self.lbl_hint.move(0, MAP_Y + MAP_H + 72)
         self.lbl_hint.setAlignment(Qt.AlignHCenter)
         self.lbl_hint.setStyleSheet(
             "color: #3a4565; font-size: 10px; font-family: 'Segoe UI';"
             "background: transparent;")
 
     def _on_start(self):
-        """START 클릭 → 페이드아웃 후 메인창 실행."""
         self.btn_start.setEnabled(False)
         self.btn_start.setText("Loading...")
-
         self._anim_out = QPropertyAnimation(self, b"windowOpacity")
         self._anim_out.setDuration(400)
         self._anim_out.setStartValue(1.0)
@@ -212,5 +227,5 @@ class SplashScreen(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         p.setRenderHint(QPainter.TextAntialiasing)
-        _draw_background(p, self.width(), self.height())
+        _draw_background(p, self.width(), self.height(), self._assets_dir)
         p.end()

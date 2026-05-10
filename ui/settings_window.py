@@ -27,7 +27,7 @@ DEFAULT_SETTINGS = {
     "nd_hm_m"       : 1.5,
     "nd_min_rx"     : -126.6,
     "nd_indoor_loss": 0.0,
-    "heatmap_step"  : 0.0015,
+    "heatmap_step"  : 0.00018,
     "heatmap_diff"  : False,
     "map_tile"      : "CartoDB Voyager",
     "cov_n_samples" : 100,
@@ -150,7 +150,7 @@ class SettingsWindow(QDialog):
 
         self.cb_model = QComboBox()
         self.cb_model.addItem("SmartCity LoRaScape Model", "smartcity")
-        self.cb_model.addItem("COST-231 Hata Model",       "cost231")
+        self.cb_model.addItem("COST-231 Model",       "cost231")
 
         fl1.addRow("전파 모델",         self.cb_model)
         fl1.addRow("반송 주파수",       self.sp_fc)
@@ -211,7 +211,7 @@ class SettingsWindow(QDialog):
         t4 = QWidget(); fl4 = QFormLayout(t4); fl4.setSpacing(10)
 
         # 소수점 5자리, 최솟값 0.00010, step 0.00005
-        self.sp_hm_step  = _dspin(0.00010, 0.005, 0.0015, 5, "°", 0.00005)
+        self.sp_hm_step  = _dspin(0.00010, 0.005, 0.00018, 5, "°", 0.00005)
         self.chk_hm_diff = QCheckBox("Deygout 회절 포함 (정확하나 느림)")
         self.cb_tile     = QComboBox()
         for t in MAP_TILES:
@@ -225,7 +225,7 @@ class SettingsWindow(QDialog):
             "· 0.00018° ≈ 20m/격자  (매우 정밀, 매우 느림)\n"
             "· 0.00050° ≈ 56m/격자  (정밀, 느림)\n"
             "· 0.00100° ≈ 111m/격자 (보통, 느림)\n"
-            "· 0.00150° ≈ 167m/격자 (기본, 빠름)\n"
+            "· 0.000180° ≈ 167m/격자 (기본, 빠름)\n"
             "· 0.00200° ≈ 222m/격자 (빠름, 거침)")
         note4.setStyleSheet(f"color:{MUTED};font-size:10px;")
         fl4.addRow("", note4)
@@ -286,7 +286,7 @@ class SettingsWindow(QDialog):
         self.sp_nd_rxm.setValue(s.get("nd_min_rx",    -126.6))
         self.sp_nd_indoor.setValue(s.get("nd_indoor_loss", 0.0))
 
-        self.sp_hm_step.setValue(s.get("heatmap_step", 0.0015))
+        self.sp_hm_step.setValue(s.get("heatmap_step", 0.00018))
         self.chk_hm_diff.setChecked(s.get("heatmap_diff", False))
 
         tile = s.get("map_tile", "CartoDB Voyager")
