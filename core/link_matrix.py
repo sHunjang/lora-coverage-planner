@@ -82,7 +82,6 @@ class HeatmapWorker(QObject):
                 {'pr': -100, 'color': '#FF8C00'},
                 {'pr': -110, 'color': '#FFD700'},
                 {'pr': -120, 'color': '#00C94A'},
-                {'pr': -130, 'color': '#4f8ef7'},
             ])
             SF_SENS = {
                 7: -123.0, 8: -126.0, 9: -129.0,
@@ -514,6 +513,27 @@ class MainWindow(QMainWindow):
             selected_gws=sel)
         self.lbl.setText(f"히트맵: {', '.join(sel)}")
         self.status.showMessage(f"히트맵 완료: {', '.join(sel)}")
+
+        # ── 히트맵에 사용된 GW로만 커버리지 분석 ────────────────
+        # sel에 'COMBINED'가 있으면 전체 활성 GW, 아니면 선택된 GW만
+        if nodes:
+            hm_callsigns = set(sel)
+            if 'COMBINED' in hm_callsigns:
+                # 다중 GW 합성 히트맵 → 히트맵 계산에 사용된 GW로 분석
+                cov_gws = [g for g in gws if g.enabled and g.callsign in
+                        {h.get('callsign') for h in self._heatmaps
+                            if h.get('type') == 'combined'}]
+                if not cov_gws:
+                    cov_gws = [g for g in gws if g.enabled]
+            else:
+                # 단일 GW 히트맵 → 해당 GW만으로 분석
+                cov_gws = [g for g in gws if g.callsign in hm_callsigns]
+
+            if cov_gws:
+                self.status.showMessage(
+                    f"히트맵 완료 — 커버리지 분석 자동 시작 "
+                    f"({', '.join(g.callsign for g in cov_gws)})...")
+                self._run_coverage(cov_gws)
 
     # ── 최적 배치 결과 ───────────────────────────────────────
 

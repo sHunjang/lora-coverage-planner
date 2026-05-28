@@ -111,7 +111,11 @@ class ProfileWindow(QDialog):
         # 결과 라벨
         self.lbl = QLabel("")
         self.lbl.setStyleSheet(
-            f"color:{MUTED};font-size:11px;padding:2px 4px;")
+            "font-size:11px;padding:4px 6px;"
+            "background:#1e2130;border:1px solid #2a2f3b;"
+            "border-radius:6px;")
+        self.lbl.setTextFormat(Qt.RichText)
+        self.lbl.setWordWrap(True)
         lay.addWidget(self.lbl)
 
     def _draw(self):
@@ -248,18 +252,44 @@ class ProfileWindow(QDialog):
             facecolor='#1e2130', edgecolor='#2a2f3b',
             labelcolor='#a0a8be')
 
-        # 결과 요약 라벨
-        los_ok   = not blocked.any()
-        n_block  = int(blocked.sum())
-        max_pen  = float(np.max(elevs - fres_lower)) if fresnel_violated.any() else 0
-        fres_ok  = max_pen <= 0
+        # ── 결과 요약 라벨 + LOS/NLOS 배지 ─────────────────
+        los_ok  = not blocked.any()
+        n_block = int(blocked.sum())
+        max_pen = float(np.max(elevs - fres_lower)) if fresnel_violated.any() else 0
+        fres_ok = max_pen <= 0
 
-        status = "✓ LOS Clear" if los_ok else f"✗ LOS Blocked ({n_block} pts)"
-        fstatus= "✓ Fresnel OK" if fres_ok else f"△ Fresnel Violated {max_pen:.1f}m"
-        self.lbl.setText(
-            f"Distance: {d_total/1000:.2f}km  |  {status}  |  {fstatus}  |  "
-            f"GW: {elevs[0]:.0f}m + {gw.hb_m:.0f}m  |  "
-            f"Node: {elevs[-1]:.0f}m + {nd.hm_m:.0f}m")
+        # LOS/NLOS 배지 색상
+        if los_ok:
+            los_color  = '#00C94A'
+            los_text   = '✓ LOS'
+            los_bg     = '#0d2010'
+        else:
+            los_color  = '#FF4444'
+            los_text   = f'✗ NLOS ({n_block}pts 차단)'
+            los_bg     = '#200d0d'
 
-        self.fig.tight_layout(pad=1.2)
-        self.canvas.draw()
+        fres_color = '#00C94A' if fres_ok else '#FF8C00'
+        fres_text  = '✓ Fresnel OK' if fres_ok else f'△ Fresnel 침범 {max_pen:.1f}m'
+
+        # 배지 HTML
+        badge_html = (
+            f'<span style="background:{los_bg};color:{los_color};'
+            f'border:1px solid {los_color};border-radius:4px;'
+            f'padding:2px 8px;font-weight:bold;font-size:12px;">'
+            f'{los_text}</span>'
+            f'&nbsp;&nbsp;'
+            f'<span style="color:{fres_color};font-size:11px;">'
+            f'{fres_text}</span>'
+            f'&nbsp;&nbsp;'
+            f'<span style="color:#7a8099;font-size:11px;">'
+            f'거리: {d_total/1000:.2f}km | '
+            f'GW: {elevs[0]:.0f}m+{gw.hb_m:.0f}m | '
+            f'Node: {elevs[-1]:.0f}m+{nd.hm_m:.0f}m'
+            f'</span>'
+        )
+        self.lbl.setText(badge_html)
+        self.lbl.setStyleSheet(
+            "font-size:11px;padding:4px 6px;"
+            f"background:#1e2130;border:1px solid #2a2f3b;"
+            f"border-radius:6px;")
+        self.lbl.setTextFormat(Qt.RichText)

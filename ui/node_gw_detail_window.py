@@ -12,6 +12,7 @@ from PyQt5.QtGui import QColor
 import csv
 from ui.dialogs import DARK, PANEL, TEXT, MUTED, BORDER, STYLE_DLG
 from core.coverage import GWEntry, NodeEntry
+from core.utils import haversine, bearing   # ← 추가
 
 COLS = ['GW Callsign', '거리(km)', '방위각(°)', 'Pr(dBm)',
         '상태', '경도', '위도', '높이(m)', 'Pt(dBm)']
@@ -54,22 +55,6 @@ class CallsignItem(QTableWidgetItem):
                 return self._num < other._num
             return self._prefix < other._prefix
         return super().__lt__(other)
-
-def haversine(lon1, lat1, lon2, lat2) -> float:
-    R = 6371.0
-    phi1, phi2 = np.radians(lat1), np.radians(lat2)
-    dphi = np.radians(lat2 - lat1)
-    dlam = np.radians(lon2 - lon1)
-    a = np.sin(dphi/2)**2 + np.cos(phi1)*np.cos(phi2)*np.sin(dlam/2)**2
-    return R * 2 * np.arctan2(np.sqrt(a), np.sqrt(1-a))
-
-
-def bearing(lon1, lat1, lon2, lat2) -> float:
-    phi1, phi2 = np.radians(lat1), np.radians(lat2)
-    dlam = np.radians(lon2 - lon1)
-    x = np.sin(dlam) * np.cos(phi2)
-    y = np.cos(phi1)*np.sin(phi2) - np.sin(phi1)*np.cos(phi2)*np.cos(dlam)
-    return (np.degrees(np.arctan2(x, y)) + 360) % 360
 
 
 class NodeGWDetailWindow(QDialog):

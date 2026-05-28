@@ -5,7 +5,8 @@ from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QDoubleSpinBox, QSpinBox, QCheckBox,
     QGroupBox, QFormLayout, QPlainTextEdit,
-    QProgressBar, QMessageBox,
+    QProgressBar, QMessageBox, QComboBox,
+    QScrollArea, QWidget,
 )
 from PyQt5.QtCore import Qt, QObject, pyqtSignal, QThread
 
@@ -23,6 +24,15 @@ QProgressBar {{
     color:{TEXT}; font-size:10px;
 }}
 QProgressBar::chunk {{ background:#1d6a1d; border-radius:3px; }}
+QComboBox {{
+    background:{PANEL}; color:{TEXT};
+    border:1px solid {BORDER}; border-radius:4px;
+    padding:4px 8px; min-height:26px;
+}}
+QComboBox QAbstractItemView {{
+    background:{PANEL}; color:{TEXT};
+    selection-background-color:#253a5a;
+}}
 """
 
 BTN = ("QPushButton{background:#1c2a3a;color:#7ab8e8;"
@@ -52,7 +62,6 @@ class LinkMatrixWorker(QObject):
         try:
             from core.propagation import PathLossModel
             from concurrent.futures import ThreadPoolExecutor, as_completed
-            import numpy as np
 
             p  = self.params
             N  = len(self.nodes)
@@ -128,14 +137,12 @@ class GWOptimizeWorker(QObject):
             import pandas as pd
             from core.gw_optimizer import GWOptimizer
 
-            # ── Node 좌표 → 3857 변환 (벡터화) ──────────────
             lons = np.array([n.lon for n in self.nodes])
             lats = np.array([n.lat for n in self.nodes])
             st_x, st_y = self.spatial.lonlat_to_xy(lons, lats)
             st_x = np.array(st_x, dtype=np.float64)
             st_y = np.array(st_y, dtype=np.float64)
 
-            # ── 실제 지형 고도 계산 (벡터화) ─────────────────
             elevations = self.spatial.get_elevation_batch(st_x, st_y)
             valid_cnt  = int(np.sum(elevations > 0))
             self.sig_log.emit(
@@ -164,32 +171,43 @@ class GWOptimizeWorker(QObject):
                 use_traffic_weight  = p.get("use_traffic", True),
                 optimize_hb         = p.get("opt_hb", False),
             )
-            result = opt.run(progress_cb=self.sig_log.emit)
 
-            # ── 미커버 Node 처리 ────────────────────────────────
-            # truly_isolated: 물리적으로 어떤 GW로도 커버 불가 Node
-            # → GW를 추가해도 커버 불가이므로 제외
-            isolated   = getattr(result, 'truly_isolated', set())
-            uncovered  = [i for i, gw_no in enumerate(result.node_gw)
-                          if gw_no == 0 and i not in isolated]
+            # ── 알고리즘 선택 ────────────────────────────────
+            algo = p.get("algorithm", "kmeans")
+            if algo == "ga":
+                self.sig_log.emit(
+                    f"유전 알고리즘(GA) 실행 중... "
+                    f"(세대={p.get('ga_generations',50)}, "
+                    f"인구={p.get('ga_population',30)})")
+                result = opt.run_ga(
+                    n_generations = p.get("ga_generations", 50),
+                    population    = p.get("ga_population",  30),
+                    progress_cb   = self.sig_log.emit,
+                )
+            else:
+                self.sig_log.emit("K-means 기반 최적화 실행 중...")
+                result = opt.run(progress_cb=self.sig_log.emit)
+
+            # ── 미커버 Node 처리 ─────────────────────────────
+            isolated  = getattr(result, 'truly_isolated', set())
+            uncovered = [i for i, gw_no in enumerate(result.node_gw)
+                         if gw_no == 0 and i not in isolated]
             n_isolated = len([i for i, gw_no in enumerate(result.node_gw)
                               if gw_no == 0 and i in isolated])
 
             if n_isolated > 0:
                 self.sig_log.emit(
-                    f"물리적 커버 불가 Node {n_isolated}개 → GW 추가 불필요 (지형 차단)")
+                    f"물리적 커버 불가 Node {n_isolated}개 → GW 추가 불필요")
 
             if uncovered:
                 self.sig_log.emit(
                     f"미커버 Node {len(uncovered)}개 → 바로 옆에 GW 추가 중...")
-
                 gw_lons = list(result.gw_lon)
                 gw_lats = list(result.gw_lat)
                 node_gw = list(result.node_gw)
-
                 for ni in uncovered:
                     nd = self.nodes[ni]
-                    offset = 0.0001  # ~10m
+                    offset = 0.0001
                     gw_lons.append(nd.lon + offset)
                     gw_lats.append(nd.lat + offset)
                     gw_idx = len(gw_lons)
@@ -197,7 +215,6 @@ class GWOptimizeWorker(QObject):
                     self.sig_log.emit(
                         f"  Node{ni+1} → GW{gw_idx} 추가 "
                         f"({nd.lat:.5f}, {nd.lon:.5f})")
-
                 result.gw_lon          = np.array(gw_lons)
                 result.gw_lat          = np.array(gw_lats)
                 result.node_gw         = np.array(node_gw)
@@ -207,7 +224,6 @@ class GWOptimizeWorker(QObject):
                 result.gw_cover_counts = np.bincount(
                     [g for g in node_gw if g > 0],
                     minlength=result.num_gw + 1)[1:]
-
                 self.sig_log.emit(
                     f"미커버 해결 완료: GW {result.num_gw}개")
             else:
@@ -227,20 +243,49 @@ class GWOptimizeWindow(QDialog):
         super().__init__(parent)
         self.setWindowTitle("GW 최적 배치")
         self.setStyleSheet(STYLE)
-        self.resize(540, 680)
+        self.resize(560, 700)
+        self.setMinimumSize(480, 500)   # ← 최소 크기 설정 (크기 조절 가능)
         self.setWindowFlag(Qt.Window)
 
         self.spatial    = spatial
         self.nodes      = nodes
         self._thread    = None
         self._pl_matrix = None
-        self._pl_limit  = 0.0   # _update_pl()에서 설정됨, AttributeError 방지
+        self._pl_limit  = 0.0
 
         self._build()
 
     def _build(self):
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(12, 12, 12, 12)
+        from PyQt5.QtWidgets import QScrollArea
+
+        # ── 외부 레이아웃 ────────────────────────────────────
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        # ── 스크롤 영역 ──────────────────────────────────────
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setStyleSheet(f"""
+            QScrollArea {{ background:{DARK}; border:none; }}
+            QScrollBar:vertical {{
+                background:{PANEL}; width:6px; border-radius:3px;
+            }}
+            QScrollBar::handle:vertical {{
+                background:#3a4060; border-radius:3px; min-height:20px;
+            }}
+            QScrollBar::handle:vertical:hover {{ background:#4f8ef7; }}
+            QScrollBar::add-line:vertical,
+            QScrollBar::sub-line:vertical {{ height:0px; }}
+        """)
+
+        # ── 내부 콘텐츠 위젯 ─────────────────────────────────
+        content = QWidget()
+        content.setStyleSheet(f"QWidget{{background:{DARK};}}")
+        lay = QVBoxLayout(content)
+        lay.setContentsMargins(12, 12, 12, 4)
         lay.setSpacing(8)
 
         self.lbl_info = QLabel(
@@ -248,6 +293,7 @@ class GWOptimizeWindow(QDialog):
         self.lbl_info.setStyleSheet(f"color:{MUTED};font-size:12px;")
         lay.addWidget(self.lbl_info)
 
+        # ── 전파 파라미터 ────────────────────────────────────
         pg = QGroupBox("전파 파라미터")
         pg.setStyleSheet(
             f"QGroupBox{{color:{MUTED};border:1px solid {BORDER};"
@@ -285,6 +331,7 @@ class GWOptimizeWindow(QDialog):
             sp.valueChanged.connect(self._update_pl)
         lay.addWidget(pg)
 
+        # ── GW 배치 파라미터 ─────────────────────────────────
         gg = QGroupBox("GW 배치 파라미터")
         gg.setStyleSheet(pg.styleSheet())
         gl = QFormLayout(gg); gl.setSpacing(8)
@@ -310,6 +357,49 @@ class GWOptimizeWindow(QDialog):
         gl.addRow("",               self.chk_opt_hb)
         lay.addWidget(gg)
 
+        # ── 알고리즘 선택 ─────────────────────────────────────
+        ag = QGroupBox("최적화 알고리즘")
+        ag.setStyleSheet(pg.styleSheet())
+        al = QFormLayout(ag); al.setSpacing(8)
+
+        self.cb_algo = QComboBox()
+        self.cb_algo.addItem("K-means 클러스터링 (빠름, 기본)", "kmeans")
+        self.cb_algo.addItem("유전 알고리즘 GA (느림, 정밀)",    "ga")
+        self.cb_algo.currentIndexChanged.connect(self._on_algo_changed)
+
+        self.sp_ga_gen = QSpinBox()
+        self.sp_ga_gen.setRange(10, 500); self.sp_ga_gen.setValue(50)
+        self.sp_ga_gen.setSuffix(" 세대")
+
+        self.sp_ga_pop = QSpinBox()
+        self.sp_ga_pop.setRange(10, 200); self.sp_ga_pop.setValue(30)
+        self.sp_ga_pop.setSuffix(" 개체")
+
+        al.addRow("알고리즘 선택", self.cb_algo)
+        al.addRow("GA 세대 수",   self.sp_ga_gen)
+        al.addRow("GA 인구 수",   self.sp_ga_pop)
+
+        note_algo = QLabel(
+            "· K-means: 빠르고 안정적, 대부분의 경우 권장\n"
+            "· GA: 더 나은 해를 탐색하나 수 배 느림")
+        note_algo.setStyleSheet(f"color:{MUTED};font-size:10px;")
+        al.addRow("", note_algo)
+
+        self._on_algo_changed(0)
+        lay.addWidget(ag)
+
+        # ── 실행 버튼 (스크롤 밖 고정) ───────────────────────
+        lay.addStretch()
+        scroll.setWidget(content)
+        outer.addWidget(scroll)
+
+        # ── 하단 고정 영역 (스크롤 밖) ───────────────────────
+        bottom = QWidget()
+        bottom.setStyleSheet(f"QWidget{{background:{DARK};}}")
+        bot_lay = QVBoxLayout(bottom)
+        bot_lay.setContentsMargins(12, 4, 12, 12)
+        bot_lay.setSpacing(6)
+
         btn_row = QHBoxLayout()
         self.btn_step1 = QPushButton("1단계: 링크 행렬 계산")
         self.btn_step1.setStyleSheet(BTN)
@@ -318,26 +408,34 @@ class GWOptimizeWindow(QDialog):
         self.btn_step2.setEnabled(False)
         btn_row.addWidget(self.btn_step1)
         btn_row.addWidget(self.btn_step2)
-        lay.addLayout(btn_row)
+        bot_lay.addLayout(btn_row)
 
         self.progress = QProgressBar()
         self.progress.setRange(0, 0)
         self.progress.setVisible(False)
-        lay.addWidget(self.progress)
+        bot_lay.addWidget(self.progress)
 
         self.log = QPlainTextEdit()
         self.log.setReadOnly(True)
         self.log.setMaximumBlockCount(500)
-        self.log.setFixedHeight(200)
-        lay.addWidget(self.log)
+        self.log.setFixedHeight(160)
+        bot_lay.addWidget(self.log)
 
         self.lbl_result = QLabel("─")
         self.lbl_result.setStyleSheet(
             f"color:{MUTED};font-size:12px;padding:4px;")
-        lay.addWidget(self.lbl_result)
+        bot_lay.addWidget(self.lbl_result)
+
+        outer.addWidget(bottom)
 
         self.btn_step1.clicked.connect(self._run_step1)
         self.btn_step2.clicked.connect(self._run_step2)
+
+    def _on_algo_changed(self, idx):
+        """GA 옵션을 알고리즘 선택에 따라 활성/비활성."""
+        is_ga = (self.cb_algo.currentData() == "ga")
+        self.sp_ga_gen.setEnabled(is_ga)
+        self.sp_ga_pop.setEnabled(is_ga)
 
     def set_nodes(self, nodes):
         self.nodes = nodes
@@ -366,20 +464,24 @@ class GWOptimizeWindow(QDialog):
 
     def _params(self):
         return dict(
-            hm          = self.sp_hm.value(),
-            hb_gw       = self.sp_hb.value(),
-            pt          = self.sp_pt.value(),
-            gt          = self.sp_gt.value(),
-            lt          = self.sp_lt.value(),
-            p_edge      = self.sp_p_edge.value(),
-            fc          = self.sp_fc.value(),
-            env         = 2,
-            pl_limit    = self._pl_limit,
-            min_cover   = self.sp_min_cov.value(),
-            max_cover   = self.sp_max_cov.value(),
-            seed        = self.sp_seed.value(),
-            use_traffic = self.chk_traffic.isChecked(),
-            opt_hb      = self.chk_opt_hb.isChecked(),
+            hm             = self.sp_hm.value(),
+            hb_gw          = self.sp_hb.value(),
+            pt             = self.sp_pt.value(),
+            gt             = self.sp_gt.value(),
+            lt             = self.sp_lt.value(),
+            p_edge         = self.sp_p_edge.value(),
+            fc             = self.sp_fc.value(),
+            env            = 2,
+            pl_limit       = self._pl_limit,
+            min_cover      = self.sp_min_cov.value(),
+            max_cover      = self.sp_max_cov.value(),
+            seed           = self.sp_seed.value(),
+            use_traffic    = self.chk_traffic.isChecked(),
+            opt_hb         = self.chk_opt_hb.isChecked(),
+            # 알고리즘
+            algorithm      = self.cb_algo.currentData(),
+            ga_generations = self.sp_ga_gen.value(),
+            ga_population  = self.sp_ga_pop.value(),
         )
 
     def _run_step1(self):
@@ -410,9 +512,11 @@ class GWOptimizeWindow(QDialog):
         if self._pl_matrix is None:
             QMessageBox.warning(self, "경고", "1단계를 먼저 실행하세요.")
             return
+        algo = self.cb_algo.currentData()
+        algo_name = "유전 알고리즘(GA)" if algo == "ga" else "K-means"
         self._set_busy(True)
         self._log("=" * 40)
-        self._log("[2단계] GW 최적 배치 시작")
+        self._log(f"[2단계] GW 최적 배치 시작 — 알고리즘: {algo_name}")
         w = GWOptimizeWorker(
             self.spatial, self.nodes,
             self._pl_matrix, self._params())
@@ -425,7 +529,8 @@ class GWOptimizeWindow(QDialog):
         self._set_busy(False)
         n_gw = result.num_gw
         cov  = result.coverage * 100
-        avg  = float(result.gw_cover_counts.mean())                if len(result.gw_cover_counts) else 0
+        avg  = (float(result.gw_cover_counts.mean())
+                if len(result.gw_cover_counts) else 0)
         self._log(
             f"[2단계 완료] GW {n_gw}개 | 커버리지 {cov:.1f}% "
             f"| 평균 {avg:.1f}개/GW")
@@ -437,9 +542,12 @@ class GWOptimizeWindow(QDialog):
         self.sig_result_ready.emit(result, self.nodes)
 
     def _start(self, worker):
-        if self._thread and self._thread.isRunning():
-            self._thread.quit()
-            self._thread.wait(3000)
+        try:
+            if self._thread and self._thread.isRunning():
+                self._thread.quit()
+                self._thread.wait(3000)
+        except RuntimeError:
+            pass
         t = QThread(self)
         self._thread = t
         self._worker = worker

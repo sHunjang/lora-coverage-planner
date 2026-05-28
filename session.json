@@ -1,0 +1,3276 @@
+{
+  "gws": [
+    {
+      "callsign": "OPT-GW1",
+      "lon": 127.10246335146415,
+      "lat": 37.42392348030077,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW2",
+      "lon": 127.10137156352398,
+      "lat": 37.36526741101933,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW3",
+      "lon": 127.09880355090385,
+      "lat": 37.35272228017204,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW4",
+      "lon": 127.12433790526914,
+      "lat": 37.36369535089006,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW5",
+      "lon": 127.09253089383519,
+      "lat": 37.404088245217906,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW6",
+      "lon": 127.07957991843044,
+      "lat": 37.41057360960456,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW7",
+      "lon": 127.12422366013139,
+      "lat": 37.4145977323173,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW8",
+      "lon": 127.11825846765825,
+      "lat": 37.38908180430059,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW9",
+      "lon": 127.09634765893323,
+      "lat": 37.39140597444822,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW10",
+      "lon": 127.13948868432647,
+      "lat": 37.379202290262,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW11",
+      "lon": 127.18428911512153,
+      "lat": 37.44478081190239,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW12",
+      "lon": 127.1136655031218,
+      "lat": 37.43570009866857,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW13",
+      "lon": 127.16427013650285,
+      "lat": 37.388331616641736,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW14",
+      "lon": 127.16332638768986,
+      "lat": 37.444068507099864,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW15",
+      "lon": 127.18323950824515,
+      "lat": 37.42804605324315,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW16",
+      "lon": 127.17403083157774,
+      "lat": 37.42050636207969,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW17",
+      "lon": 127.15392314537394,
+      "lat": 37.464554664490926,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW18",
+      "lon": 127.08633676176227,
+      "lat": 37.35423201905803,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW19",
+      "lon": 127.07618968693848,
+      "lat": 37.433540718010256,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW20",
+      "lon": 127.07192061650899,
+      "lat": 37.361423392046106,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW21",
+      "lon": 127.09452274446144,
+      "lat": 37.38337048030618,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW22",
+      "lon": 127.08024147962952,
+      "lat": 37.424622745294215,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW23",
+      "lon": 127.1380497615323,
+      "lat": 37.437182789563856,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW24",
+      "lon": 127.15695057514519,
+      "lat": 37.40770161288046,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW25",
+      "lon": 127.0455912748312,
+      "lat": 37.390275098207674,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW26",
+      "lon": 127.08085844357586,
+      "lat": 37.39314443992649,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    },
+    {
+      "callsign": "OPT-GW27",
+      "lon": 127.16572314322427,
+      "lat": 37.463285893982324,
+      "pt_dbm": 14.0,
+      "gt_dbi": 2.15,
+      "lt_db": 0.0,
+      "hb_m": 15.0,
+      "enabled": true
+    }
+  ],
+  "nodes": [
+    {
+      "callsign": "Node1",
+      "lon": 127.12011441053777,
+      "lat": 37.3609852670392,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node2",
+      "lon": 127.10244973906752,
+      "lat": 37.40340909005634,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node3",
+      "lon": 127.10721384784176,
+      "lat": 37.44636203261671,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node4",
+      "lon": 127.05518517573543,
+      "lat": 37.386616820360956,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node5",
+      "lon": 127.04722096296756,
+      "lat": 37.4174884428588,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node6",
+      "lon": 127.13320161376156,
+      "lat": 37.38167074708069,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node7",
+      "lon": 127.17166459514594,
+      "lat": 37.46436840979302,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node8",
+      "lon": 127.10680075326613,
+      "lat": 37.44293364674106,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node9",
+      "lon": 127.13167224254133,
+      "lat": 37.34619294389444,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node10",
+      "lon": 127.0752484256623,
+      "lat": 37.361516340314076,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node11",
+      "lon": 127.1408804655419,
+      "lat": 37.41168234953417,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node12",
+      "lon": 127.10178760202903,
+      "lat": 37.41519993776737,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node13",
+      "lon": 127.11341588049515,
+      "lat": 37.43699592940658,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node14",
+      "lon": 127.10817955391816,
+      "lat": 37.37354673159624,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node15",
+      "lon": 127.09295345809942,
+      "lat": 37.38739104495181,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node16",
+      "lon": 127.16539247441841,
+      "lat": 37.448467547653664,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node17",
+      "lon": 127.04025935328787,
+      "lat": 37.38804371160135,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node18",
+      "lon": 127.14647926484851,
+      "lat": 37.40162480132771,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node19",
+      "lon": 127.04631562348156,
+      "lat": 37.38303474964333,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node20",
+      "lon": 127.12876548204939,
+      "lat": 37.3384797070812,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node21",
+      "lon": 127.09611569556859,
+      "lat": 37.376729758349626,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node22",
+      "lon": 127.1046803657506,
+      "lat": 37.395797081975154,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node23",
+      "lon": 127.12144049376951,
+      "lat": 37.369364866177186,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node24",
+      "lon": 127.14988622514083,
+      "lat": 37.38028566393567,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node25",
+      "lon": 127.0798558949479,
+      "lat": 37.4016670470819,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node26",
+      "lon": 127.16654919271534,
+      "lat": 37.42202193850897,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node27",
+      "lon": 127.10365966438842,
+      "lat": 37.442653204564365,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node28",
+      "lon": 127.04355408574986,
+      "lat": 37.40834546499526,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node29",
+      "lon": 127.05865296422171,
+      "lat": 37.42701759787304,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node30",
+      "lon": 127.182776280166,
+      "lat": 37.455476949369604,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node31",
+      "lon": 127.13974812553475,
+      "lat": 37.3758836516951,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node32",
+      "lon": 127.10234964874753,
+      "lat": 37.44321718768302,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node33",
+      "lon": 127.08196001894112,
+      "lat": 37.36790343557274,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node34",
+      "lon": 127.1494449538855,
+      "lat": 37.43457807965385,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node35",
+      "lon": 127.10646145596687,
+      "lat": 37.355110168792535,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node36",
+      "lon": 127.04366012045885,
+      "lat": 37.421001256636224,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node37",
+      "lon": 127.11040048995633,
+      "lat": 37.4277319880715,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node38",
+      "lon": 127.05484127606273,
+      "lat": 37.404398685069715,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node39",
+      "lon": 127.07898831615628,
+      "lat": 37.415930264996085,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node40",
+      "lon": 127.12940281993848,
+      "lat": 37.44114027606552,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node41",
+      "lon": 127.15097599457874,
+      "lat": 37.424393196841855,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node42",
+      "lon": 127.10246335146415,
+      "lat": 37.42392348030077,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node43",
+      "lon": 127.1689059100378,
+      "lat": 37.456647623889836,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node44",
+      "lon": 127.14990491945194,
+      "lat": 37.420517092558335,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node45",
+      "lon": 127.14283978793115,
+      "lat": 37.429642223202805,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node46",
+      "lon": 127.04541948244182,
+      "lat": 37.427712112113575,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node47",
+      "lon": 127.12930917769262,
+      "lat": 37.42655269578204,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node48",
+      "lon": 127.15167222935051,
+      "lat": 37.41351329532567,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node49",
+      "lon": 127.06760835600785,
+      "lat": 37.41482218551166,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node50",
+      "lon": 127.10053840203082,
+      "lat": 37.373230580987865,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node51",
+      "lon": 127.14923360643168,
+      "lat": 37.396228560269314,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node52",
+      "lon": 127.14013537971807,
+      "lat": 37.39026481441873,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node53",
+      "lon": 127.11577785793112,
+      "lat": 37.39634263439695,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node54",
+      "lon": 127.07780666970035,
+      "lat": 37.41181528280046,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node55",
+      "lon": 127.1237189504954,
+      "lat": 37.37240867524688,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node56",
+      "lon": 127.12422366013139,
+      "lat": 37.4145977323173,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node57",
+      "lon": 127.10392843198791,
+      "lat": 37.3603555796418,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node58",
+      "lon": 127.10728771386046,
+      "lat": 37.44650486897502,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node59",
+      "lon": 127.04098445809556,
+      "lat": 37.392908241290854,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node60",
+      "lon": 127.19036007674953,
+      "lat": 37.42948008359866,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node61",
+      "lon": 127.09048525037836,
+      "lat": 37.44159719360338,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node62",
+      "lon": 127.05874869155988,
+      "lat": 37.41551054590151,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node63",
+      "lon": 127.06745512403286,
+      "lat": 37.430257286600586,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node64",
+      "lon": 127.09618668712919,
+      "lat": 37.427985587815726,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node65",
+      "lon": 127.08581725978864,
+      "lat": 37.388957141249854,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node66",
+      "lon": 127.09173082516814,
+      "lat": 37.44793984177523,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node67",
+      "lon": 127.15172061891425,
+      "lat": 37.47338190902535,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node68",
+      "lon": 127.04681104015229,
+      "lat": 37.40231230522735,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node69",
+      "lon": 127.11760406160107,
+      "lat": 37.40344355291084,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node70",
+      "lon": 127.09725510226168,
+      "lat": 37.38151350691457,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node71",
+      "lon": 127.12937249475064,
+      "lat": 37.46077154966507,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node72",
+      "lon": 127.16386661715569,
+      "lat": 37.46677407432948,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node73",
+      "lon": 127.15439657745218,
+      "lat": 37.43473061412534,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node74",
+      "lon": 127.13789377995523,
+      "lat": 37.43397388493597,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node75",
+      "lon": 127.09124660887008,
+      "lat": 37.447513344678704,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node76",
+      "lon": 127.0810855503354,
+      "lat": 37.40863200352173,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node77",
+      "lon": 127.0796808131813,
+      "lat": 37.42909240549998,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node78",
+      "lon": 127.12668811895632,
+      "lat": 37.395062048155964,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node79",
+      "lon": 127.09306800298599,
+      "lat": 37.438985473864385,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node80",
+      "lon": 127.15392314537394,
+      "lat": 37.464554664490926,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node81",
+      "lon": 127.17403083157774,
+      "lat": 37.42050636207969,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node82",
+      "lon": 127.12901523135135,
+      "lat": 37.40086931722332,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node83",
+      "lon": 127.10814993617116,
+      "lat": 37.36739146146454,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node84",
+      "lon": 127.09682038956228,
+      "lat": 37.35746012574316,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node85",
+      "lon": 127.09867218654014,
+      "lat": 37.34979652822439,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node86",
+      "lon": 127.05323272774089,
+      "lat": 37.387944437251825,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node87",
+      "lon": 127.13340802565101,
+      "lat": 37.40900726107655,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node88",
+      "lon": 127.09819652349735,
+      "lat": 37.452625536731645,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node89",
+      "lon": 127.1754830551604,
+      "lat": 37.44031958982631,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node90",
+      "lon": 127.12995845742896,
+      "lat": 37.43050088951704,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node91",
+      "lon": 127.12573190883626,
+      "lat": 37.359785760532176,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node92",
+      "lon": 127.15025192490445,
+      "lat": 37.47004178729841,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node93",
+      "lon": 127.1146628356276,
+      "lat": 37.36344870534454,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node94",
+      "lon": 127.16605713244725,
+      "lat": 37.41545002642699,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node95",
+      "lon": 127.08242865284437,
+      "lat": 37.362291322015935,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node96",
+      "lon": 127.08038431180798,
+      "lat": 37.4334527485167,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node97",
+      "lon": 127.0874251857062,
+      "lat": 37.414149121365185,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node98",
+      "lon": 127.04371898918546,
+      "lat": 37.39476437531613,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node99",
+      "lon": 127.10268264114211,
+      "lat": 37.34022189766228,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node100",
+      "lon": 127.07940348398408,
+      "lat": 37.40624146467889,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node101",
+      "lon": 127.11999643546909,
+      "lat": 37.418944515734076,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node102",
+      "lon": 127.1532198757991,
+      "lat": 37.448971450487534,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node103",
+      "lon": 127.11949539481041,
+      "lat": 37.40828389730521,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node104",
+      "lon": 127.11358431732978,
+      "lat": 37.36880981976847,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node105",
+      "lon": 127.08085844357586,
+      "lat": 37.39314443992649,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node106",
+      "lon": 127.12677672077471,
+      "lat": 37.361845011523364,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node107",
+      "lon": 127.11760104437515,
+      "lat": 37.36123564509412,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node108",
+      "lon": 127.08709607989206,
+      "lat": 37.364163489982865,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node109",
+      "lon": 127.18019094180696,
+      "lat": 37.452984927263444,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node110",
+      "lon": 127.19230120780449,
+      "lat": 37.445027789905744,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node111",
+      "lon": 127.0976521644474,
+      "lat": 37.409366452142976,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node112",
+      "lon": 127.15585741373357,
+      "lat": 37.40667831207668,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node113",
+      "lon": 127.12675325504784,
+      "lat": 37.40946573211116,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node114",
+      "lon": 127.10094389851776,
+      "lat": 37.44377361074995,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node115",
+      "lon": 127.17507425256738,
+      "lat": 37.43267619543518,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node116",
+      "lon": 127.1430794305412,
+      "lat": 37.36400712607347,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node117",
+      "lon": 127.1346327531738,
+      "lat": 37.4339494953152,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node118",
+      "lon": 127.13865206762053,
+      "lat": 37.38235142964472,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node119",
+      "lon": 127.13224508580014,
+      "lat": 37.36004543655055,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node120",
+      "lon": 127.1695561727521,
+      "lat": 37.39147006834456,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node121",
+      "lon": 127.10695597134625,
+      "lat": 37.40645810184238,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node122",
+      "lon": 127.11918668582761,
+      "lat": 37.43061436306609,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node123",
+      "lon": 127.1733561312711,
+      "lat": 37.4088451092423,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node124",
+      "lon": 127.09634765893323,
+      "lat": 37.39140597444822,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node125",
+      "lon": 127.07883785128732,
+      "lat": 37.35692593143243,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node126",
+      "lon": 127.05905473334782,
+      "lat": 37.37788783714668,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node127",
+      "lon": 127.08806451422188,
+      "lat": 37.439837928877985,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node128",
+      "lon": 127.060237865029,
+      "lat": 37.42607809947699,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node129",
+      "lon": 127.13630499755385,
+      "lat": 37.41372843753046,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node130",
+      "lon": 127.16332638768986,
+      "lat": 37.444068507099864,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node131",
+      "lon": 127.18428911512153,
+      "lat": 37.44478081190239,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node132",
+      "lon": 127.14202910444237,
+      "lat": 37.45505499826297,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node133",
+      "lon": 127.09557233915676,
+      "lat": 37.44096217530722,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node134",
+      "lon": 127.16626626248588,
+      "lat": 37.43194865942356,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node135",
+      "lon": 127.16238862513822,
+      "lat": 37.391750586550486,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node136",
+      "lon": 127.08614755985808,
+      "lat": 37.40876614040387,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node137",
+      "lon": 127.09588397173692,
+      "lat": 37.35170465542143,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node138",
+      "lon": 127.0900164298312,
+      "lat": 37.41069459651563,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node139",
+      "lon": 127.15112647620408,
+      "lat": 37.381339686788046,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node140",
+      "lon": 127.16845801762129,
+      "lat": 37.393517378964155,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node141",
+      "lon": 127.07080401059524,
+      "lat": 37.35992458607779,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node142",
+      "lon": 127.14999283375427,
+      "lat": 37.38378485216311,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node143",
+      "lon": 127.12193666245639,
+      "lat": 37.34949903883581,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node144",
+      "lon": 127.17529096628219,
+      "lat": 37.421690663311274,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node145",
+      "lon": 127.08876808583223,
+      "lat": 37.427747354309055,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node146",
+      "lon": 127.14990375605097,
+      "lat": 37.37267056339906,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node147",
+      "lon": 127.07192061650899,
+      "lat": 37.361423392046106,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node148",
+      "lon": 127.19188040394843,
+      "lat": 37.44274487901184,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node149",
+      "lon": 127.17066623660851,
+      "lat": 37.45655193571731,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node150",
+      "lon": 127.11614894414949,
+      "lat": 37.33882776442731,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node151",
+      "lon": 127.09253089383519,
+      "lat": 37.404088245217906,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node152",
+      "lon": 127.1122472488697,
+      "lat": 37.45597321530673,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node153",
+      "lon": 127.15580555975302,
+      "lat": 37.400448415981714,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node154",
+      "lon": 127.0952282654802,
+      "lat": 37.366616356397756,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node155",
+      "lon": 127.08354621664195,
+      "lat": 37.408301635056844,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node156",
+      "lon": 127.15737407665338,
+      "lat": 37.379065750186484,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node157",
+      "lon": 127.16531231330703,
+      "lat": 37.43586448137093,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node158",
+      "lon": 127.07130051113931,
+      "lat": 37.42645419770496,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node159",
+      "lon": 127.13289102389139,
+      "lat": 37.381194376193584,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node160",
+      "lon": 127.06737660812519,
+      "lat": 37.36456907481734,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node161",
+      "lon": 127.11186061075387,
+      "lat": 37.353654357275914,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node162",
+      "lon": 127.07567226235935,
+      "lat": 37.38190510505053,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node163",
+      "lon": 127.11329617734063,
+      "lat": 37.39328930224478,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node164",
+      "lon": 127.15041734640674,
+      "lat": 37.366879153380104,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node165",
+      "lon": 127.0730139885247,
+      "lat": 37.43277210029964,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node166",
+      "lon": 127.10452191257407,
+      "lat": 37.35228946085904,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node167",
+      "lon": 127.13559939513127,
+      "lat": 37.46902631798337,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node168",
+      "lon": 127.1646034912031,
+      "lat": 37.43982540246221,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node169",
+      "lon": 127.0757073145546,
+      "lat": 37.35300187719927,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node170",
+      "lon": 127.09970706759633,
+      "lat": 37.39500407983578,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node171",
+      "lon": 127.16907029073153,
+      "lat": 37.42954859601551,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node172",
+      "lon": 127.11751080254291,
+      "lat": 37.3675994476499,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node173",
+      "lon": 127.07067740406241,
+      "lat": 37.39476303343479,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node174",
+      "lon": 127.16419172525566,
+      "lat": 37.39231596242172,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node175",
+      "lon": 127.12980249190348,
+      "lat": 37.37991822612236,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node176",
+      "lon": 127.16935351250942,
+      "lat": 37.418753660598455,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node177",
+      "lon": 127.10838590640226,
+      "lat": 37.34265739682527,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node178",
+      "lon": 127.10184814917727,
+      "lat": 37.39762249997158,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node179",
+      "lon": 127.1230424411888,
+      "lat": 37.414417956445654,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node180",
+      "lon": 127.14271523068817,
+      "lat": 37.46589222884937,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node181",
+      "lon": 127.04223563481548,
+      "lat": 37.42554191138077,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node182",
+      "lon": 127.17281572547351,
+      "lat": 37.460934596631674,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node183",
+      "lon": 127.09452274446144,
+      "lat": 37.38337048030618,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node184",
+      "lon": 127.16224879220243,
+      "lat": 37.39076685192681,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node185",
+      "lon": 127.13196948010129,
+      "lat": 37.45319142801599,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node186",
+      "lon": 127.12782714593448,
+      "lat": 37.401679268879725,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node187",
+      "lon": 127.15057456791669,
+      "lat": 37.466922652692006,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node188",
+      "lon": 127.08316878339868,
+      "lat": 37.40487989245966,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node189",
+      "lon": 127.1380497615323,
+      "lat": 37.437182789563856,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node190",
+      "lon": 127.1377263098198,
+      "lat": 37.42760929139502,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node191",
+      "lon": 127.13166498664275,
+      "lat": 37.44493254020245,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node192",
+      "lon": 127.0591007072131,
+      "lat": 37.39253268322233,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node193",
+      "lon": 127.1293613604396,
+      "lat": 37.44519609681317,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node194",
+      "lon": 127.07162078223332,
+      "lat": 37.3711180769927,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node195",
+      "lon": 127.11298893583263,
+      "lat": 37.378431722398766,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node196",
+      "lon": 127.16776732481364,
+      "lat": 37.42671068000353,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node197",
+      "lon": 127.10245711224381,
+      "lat": 37.41879978593463,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node198",
+      "lon": 127.07957991843044,
+      "lat": 37.41057360960456,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node199",
+      "lon": 127.11743338859522,
+      "lat": 37.398135708126425,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node200",
+      "lon": 127.18732465810224,
+      "lat": 37.42106994549704,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node201",
+      "lon": 127.1156701427055,
+      "lat": 37.42330681520565,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node202",
+      "lon": 127.1136655031218,
+      "lat": 37.43570009866857,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node203",
+      "lon": 127.15695057514519,
+      "lat": 37.40770161288046,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node204",
+      "lon": 127.08268940845349,
+      "lat": 37.38458315463272,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node205",
+      "lon": 127.12266685072882,
+      "lat": 37.34125160819304,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node206",
+      "lon": 127.17513546561065,
+      "lat": 37.424731442377954,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node207",
+      "lon": 127.16427013650285,
+      "lat": 37.388331616641736,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node208",
+      "lon": 127.06328963770662,
+      "lat": 37.39703391309894,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node209",
+      "lon": 127.07507536613474,
+      "lat": 37.372469034961256,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node210",
+      "lon": 127.08489971932954,
+      "lat": 37.35553771573168,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node211",
+      "lon": 127.04859902931825,
+      "lat": 37.406611149270354,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node212",
+      "lon": 127.0455912748312,
+      "lat": 37.390275098207674,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node213",
+      "lon": 127.08024147962952,
+      "lat": 37.424622745294215,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node214",
+      "lon": 127.16470520682923,
+      "lat": 37.446298874759385,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node215",
+      "lon": 127.09178524029177,
+      "lat": 37.37628826532841,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node216",
+      "lon": 127.11577822591276,
+      "lat": 37.45352126799356,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node217",
+      "lon": 127.05340334984184,
+      "lat": 37.376689992650334,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node218",
+      "lon": 127.10274374039952,
+      "lat": 37.34398804729423,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node219",
+      "lon": 127.07826613695731,
+      "lat": 37.41694586672079,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node220",
+      "lon": 127.09658278571328,
+      "lat": 37.35062775011742,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node221",
+      "lon": 127.08879396512566,
+      "lat": 37.35544930384275,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node222",
+      "lon": 127.13948868432647,
+      "lat": 37.379202290262,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node223",
+      "lon": 127.15832664801293,
+      "lat": 37.40342588631549,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node224",
+      "lon": 127.12576014979902,
+      "lat": 37.40844321518806,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node225",
+      "lon": 127.1183267169357,
+      "lat": 37.43087275834647,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node226",
+      "lon": 127.08633676176227,
+      "lat": 37.35423201905803,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node227",
+      "lon": 127.17841165405373,
+      "lat": 37.45075964355276,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node228",
+      "lon": 127.13282250926052,
+      "lat": 37.356459080547424,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node229",
+      "lon": 127.09206007904633,
+      "lat": 37.42096851163353,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node230",
+      "lon": 127.16572314322427,
+      "lat": 37.463285893982324,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node231",
+      "lon": 127.12405272267156,
+      "lat": 37.35949455893362,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node232",
+      "lon": 127.10137156352398,
+      "lat": 37.36526741101933,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node233",
+      "lon": 127.10158206269861,
+      "lat": 37.372851634637385,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node234",
+      "lon": 127.14421255839737,
+      "lat": 37.42483049155061,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node235",
+      "lon": 127.15690027290903,
+      "lat": 37.467199214200846,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node236",
+      "lon": 127.09572060947607,
+      "lat": 37.44203329818226,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node237",
+      "lon": 127.13966186696331,
+      "lat": 37.44430928645853,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node238",
+      "lon": 127.11642837382782,
+      "lat": 37.44204491543593,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node239",
+      "lon": 127.16154232110513,
+      "lat": 37.40940960872893,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node240",
+      "lon": 127.0952369602451,
+      "lat": 37.36561430271598,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node241",
+      "lon": 127.16307194353571,
+      "lat": 37.45998825790733,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node242",
+      "lon": 127.1463806845086,
+      "lat": 37.45809368308581,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node243",
+      "lon": 127.11825846765825,
+      "lat": 37.38908180430059,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node244",
+      "lon": 127.18361512467615,
+      "lat": 37.434849618588224,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node245",
+      "lon": 127.18910099361149,
+      "lat": 37.45640884139324,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node246",
+      "lon": 127.1605264403453,
+      "lat": 37.45238048065299,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node247",
+      "lon": 127.15854455515206,
+      "lat": 37.38594278822298,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node248",
+      "lon": 127.10093653986753,
+      "lat": 37.374107109055956,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node249",
+      "lon": 127.062894710998,
+      "lat": 37.40088409594557,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node250",
+      "lon": 127.0969670645678,
+      "lat": 37.381903759355815,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node251",
+      "lon": 127.04540371494755,
+      "lat": 37.36997344418318,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node252",
+      "lon": 127.09481336155105,
+      "lat": 37.37439525040866,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node253",
+      "lon": 127.10318374965182,
+      "lat": 37.40044152755802,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node254",
+      "lon": 127.07290480037675,
+      "lat": 37.37034942598235,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node255",
+      "lon": 127.07283514856549,
+      "lat": 37.440297969680934,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node256",
+      "lon": 127.13983271312907,
+      "lat": 37.400192280575716,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node257",
+      "lon": 127.10989898629084,
+      "lat": 37.425201750339944,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node258",
+      "lon": 127.05623320985562,
+      "lat": 37.39789302854396,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node259",
+      "lon": 127.11806335825925,
+      "lat": 37.391878152566875,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node260",
+      "lon": 127.10774496317096,
+      "lat": 37.44405455830995,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node261",
+      "lon": 127.10846776604954,
+      "lat": 37.461477971880484,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node262",
+      "lon": 127.14954546631226,
+      "lat": 37.45571891664607,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node263",
+      "lon": 127.17926270516784,
+      "lat": 37.4180332784404,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node264",
+      "lon": 127.13320896193568,
+      "lat": 37.35751680747069,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node265",
+      "lon": 127.05936896936201,
+      "lat": 37.397686374921925,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node266",
+      "lon": 127.05048040081317,
+      "lat": 37.42534474791696,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node267",
+      "lon": 127.1232473379285,
+      "lat": 37.39877891944832,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node268",
+      "lon": 127.07678416051452,
+      "lat": 37.432567597504665,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node269",
+      "lon": 127.15329839985253,
+      "lat": 37.45412165641382,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node270",
+      "lon": 127.10751977305054,
+      "lat": 37.421759927812595,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node271",
+      "lon": 127.10871749929397,
+      "lat": 37.42805566145542,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node272",
+      "lon": 127.10965315082424,
+      "lat": 37.38355570355424,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node273",
+      "lon": 127.09527332341031,
+      "lat": 37.37367147885566,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node274",
+      "lon": 127.05918616888026,
+      "lat": 37.37090087233055,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node275",
+      "lon": 127.15339919251213,
+      "lat": 37.44653663198548,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node276",
+      "lon": 127.05378971796026,
+      "lat": 37.37994458455093,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node277",
+      "lon": 127.09880355090385,
+      "lat": 37.35272228017204,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node278",
+      "lon": 127.1145273128461,
+      "lat": 37.40454364919197,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node279",
+      "lon": 127.10152260145087,
+      "lat": 37.40675675745998,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node280",
+      "lon": 127.09850023677235,
+      "lat": 37.40075390372299,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node281",
+      "lon": 127.04231406229289,
+      "lat": 37.37218053820921,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node282",
+      "lon": 127.13484550344633,
+      "lat": 37.44608579469709,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node283",
+      "lon": 127.19013818372376,
+      "lat": 37.43335820315945,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node284",
+      "lon": 127.07618968693848,
+      "lat": 37.433540718010256,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node285",
+      "lon": 127.05104084195645,
+      "lat": 37.407312874010316,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node286",
+      "lon": 127.08966782489716,
+      "lat": 37.40077107484411,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node287",
+      "lon": 127.07229182663495,
+      "lat": 37.42513114855314,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node288",
+      "lon": 127.08733909853295,
+      "lat": 37.350544891792985,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node289",
+      "lon": 127.05219352823548,
+      "lat": 37.379063797703076,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node290",
+      "lon": 127.08012904829582,
+      "lat": 37.380938935408885,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node291",
+      "lon": 127.18323950824515,
+      "lat": 37.42804605324315,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node292",
+      "lon": 127.13026092229678,
+      "lat": 37.38896776144741,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node293",
+      "lon": 127.12433790526914,
+      "lat": 37.36369535089006,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node294",
+      "lon": 127.13386487879913,
+      "lat": 37.420444013792746,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node295",
+      "lon": 127.12606820148534,
+      "lat": 37.37093924777433,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node296",
+      "lon": 127.0758731248268,
+      "lat": 37.38438233508276,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node297",
+      "lon": 127.14081037563417,
+      "lat": 37.38416092009459,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node298",
+      "lon": 127.12088866247501,
+      "lat": 37.39637245246154,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node299",
+      "lon": 127.10779516547738,
+      "lat": 37.4003623062319,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    },
+    {
+      "callsign": "Node300",
+      "lon": 127.16176129919029,
+      "lat": 37.40642587406057,
+      "gr_dbi": 2.15,
+      "lr_db": 0.0,
+      "hm_m": 1.5,
+      "min_rx_dbm": -126.6,
+      "indoor_loss_db": 0.0
+    }
+  ]
+}

@@ -578,6 +578,187 @@ class GWOptimizer:
             truly_isolated  = truly_isolated,   # 물리적 커버 불가 Node 집합
         )
 
+    def run_ga(self, n_generations=50, population=30, progress_cb=None):
+        """
+        유전 알고리즘(GA) 기반 GW 최적 배치.
+
+        run()의 K-means 초기 배치를 그대로 사용하되,
+        Step 8에서 GA로 GW 수를 최소화합니다.
+        n_generations, population 파라미터를 UI에서 직접 제어합니다.
+
+        Args:
+            n_generations: GA 세대 수 (기본 50)
+            population   : GA 인구 수 (기본 30)
+            progress_cb  : 진행 로그 콜백
+        Returns:
+            GWResult
+        """
+        def _log(msg):
+            if progress_cb: progress_cb(msg)
+            else: print(msg)
+
+        _log("=" * 58)
+        _log(f"  GW 최적 배치 (유전 알고리즘)")
+        _log(f"  GW 안테나 {self.hb_gw}m | PL_limit {self.pl_limit:.2f} dB")
+        _log(f"  세대 수: {n_generations} | 인구 수: {population}")
+        _log("=" * 58)
+
+        # ── Step 1~5: K-means 초기 배치 (run()과 동일) ───────
+        _log("\n[Step 1] station 연결 수 기반 우선순위 정렬")
+        ranked, link_counts = self._rank_candidates()
+        _log(f"  최다 연결: ST{ranked[0]+1} ({link_counts[ranked[0]]}개)")
+
+        _log(f"\n[Step 2] GW↔station 커버 집합 계산")
+        cov_sets = self._calc_all_coverage_sets(progress_cb)
+        sizes    = [len(v) for v in cov_sets.values()]
+        _log(f"  커버 크기: 평균 {np.mean(sizes):.1f} | 최대 {max(sizes)}")
+
+        excluded = {g for g, s in cov_sets.items() if len(s) < self.min_cover}
+        if excluded:
+            _log(f"  GW 후보 제외: {len(excluded)}개 (커버 집합 < {self.min_cover})")
+            cov_sets = {g: s for g, s in cov_sets.items() if g not in excluded}
+
+        _log("\n[Step 3] Greedy Set Cover (초기 배치)")
+        greedy_gws = self._greedy(ranked, link_counts, cov_sets, progress_cb)
+        k = len(greedy_gws)
+        _log(f"  → 초기 GW 수: {k}개")
+
+        _log(f"\n[Step 4] K-means 클러스터링 (k={k})")
+        labels = self._kmeans(k, greedy_gws, progress_cb)
+
+        _log("\n[Step 5] GW 위치 확정")
+        gw_indices = self._assign_positions(k, labels)
+
+        _log("\n[Step 6] 커버리지 검증")
+        final_cov = {}
+        for g in gw_indices:
+            final_cov[g] = cov_sets.get(g) or self._calc_coverage_set(g)
+
+        node_gw, counts, coverage = self._verify(gw_indices, final_cov)
+        uncov = int(np.sum(node_gw == 0))
+        _log(f"  커버: {int(np.sum(node_gw>0)):,}/{self.N:,}개 ({coverage*100:.1f}%)")
+
+        if uncov > 0:
+            _log(f"\n[Step 7] 미커버 {uncov}개 → GW 강제 추가")
+            extra_indices = list(gw_indices)
+            extra_cov     = dict(final_cov)
+            for iso in list(np.where(node_gw == 0)[0]):
+                extra_indices.append(int(iso))
+                extra_cov[iso] = cov_sets.get(iso) or {iso}
+            gw_indices = np.array(extra_indices, dtype=int)
+            final_cov  = extra_cov
+            node_gw, counts, coverage = self._verify(gw_indices, final_cov)
+            k = len(gw_indices)
+            _log(f"  → GW {k}개 | 커버리지 {coverage*100:.1f}%")
+
+        # ── Step 8: GA 최적화 (세대/인구 파라미터 직접 제어) ──
+        _log(f"\n[Step 8] GA 최적화 ({n_generations}세대 × {population}개체)")
+
+        k_before = len(gw_indices)
+
+        gw_indices, final_cov, node_gw, counts, coverage, k = \
+            self._ga_minimize(
+                gw_indices, final_cov, cov_sets,
+                progress_cb  = progress_cb,
+                n_gen        = n_generations,
+                pop_size     = population,
+                mutation_rate= 0.1,
+            )
+
+        _log(f"  GA 결과: {k_before}개 → {k}개 (−{k_before - k}개)")
+
+        # ── Step 9: 소규모 GW 제거 ───────────────────────────
+        gw_indices, final_cov, node_gw, counts, coverage, k = \
+            self._remove_small_gws(
+                gw_indices, final_cov, node_gw, counts,
+                min_cover   = self.min_cover,
+                progress_cb = progress_cb,
+            )
+
+        _log("\n" + "=" * 58)
+        _log(f"  GA 최적화 완료: GW {k}개 | 커버리지 {coverage*100:.1f}%")
+        _log("=" * 58)
+
+        # ── 최종 PL 직접 계산으로 커버 재확정 ───────────────
+        _log("  [최종] PL 직접 계산으로 커버 재확정 중...")
+
+        lons   = self.stations.longitude.values
+        lats   = self.stations.latitude.values
+        pts    = np.stack([lons, lats], axis=1)
+        gw_pts = pts[gw_indices]
+
+        final_counts  = np.zeros(k, dtype=int)
+        final_node_gw = np.zeros(self.N, dtype=int)
+
+        # 물리적 커버 불가 station 분류
+        covered_by_any_gw = set()
+        for _s in final_cov.values():
+            covered_by_any_gw.update(_s)
+        truly_isolated = set(range(self.N)) - covered_by_any_gw
+        n_isolated     = len(truly_isolated)
+
+        # 커버 집합 기반 최근접 GW 배정 + PL 최종 검증
+        for j in range(self.N):
+            if j in truly_isolated:
+                continue
+            best_gw = -1
+            best_d  = np.inf
+            for g_pos, g in enumerate(gw_indices):
+                if j in final_cov.get(g, set()):
+                    d = float(np.sqrt(np.sum((pts[j] - gw_pts[g_pos])**2)))
+                    if d < best_d:
+                        best_d  = d
+                        best_gw = g_pos
+            if best_gw >= 0:
+                g  = int(gw_indices[best_gw])
+                gx = float(self.st_x[g])
+                gy = float(self.st_y[g])
+                pl = self.gw_model.path_loss(
+                    gx, gy, float(self.st_x[j]), float(self.st_y[j]))
+                if pl <= self.pl_limit:
+                    final_node_gw[j]       = best_gw + 1
+                    final_counts[best_gw] += 1
+
+        # 미배정 Node 전체 GW 탐색 fallback
+        for j in range(self.N):
+            if final_node_gw[j] > 0 or j in truly_isolated:
+                continue
+            dists = np.sqrt(np.sum((pts[j] - gw_pts)**2, axis=1))
+            for g_pos in np.argsort(dists):
+                g  = int(gw_indices[g_pos])
+                gx = float(self.st_x[g])
+                gy = float(self.st_y[g])
+                pl = self.gw_model.path_loss(
+                    gx, gy, float(self.st_x[j]), float(self.st_y[j]))
+                if pl <= self.pl_limit:
+                    final_node_gw[j]       = g_pos + 1
+                    final_counts[g_pos]   += 1
+                    break
+
+        n_covered     = int(np.sum(final_node_gw > 0))
+        real_coverage = float(n_covered) / self.N
+        n_coverable   = self.N - n_isolated
+        cov_of_cov    = float(n_covered) / n_coverable if n_coverable > 0 else 1.0
+
+        _log(f"  물리적 커버 불가: {n_isolated}개 (지형 차단)")
+        _log(f"  커버된 station: {n_covered}개 / 커버 가능: {n_coverable}개")
+        _log(f"  [최종] 전체 커버리지: {n_covered}/{self.N}개 ({real_coverage*100:.1f}%)")
+        _log(f"  [최종] 커버 가능 대비: {cov_of_cov*100:.1f}%")
+        _log(f"  [최종] GW {k}개 | 평균 {final_counts.mean():.1f}개/GW")
+
+        return GWResult(
+            gw_indices      = gw_indices,
+            gw_lon          = self.stations.longitude.values[gw_indices],
+            gw_lat          = self.stations.latitude.values[gw_indices],
+            gw_elev         = self.stations.elevation_m.values[gw_indices],
+            node_gw         = final_node_gw,
+            coverage        = real_coverage,
+            num_gw          = k,
+            gw_cover_counts = final_counts,
+            cluster_labels  = labels,
+            truly_isolated  = truly_isolated,
+        )
+
     def _remove_small_gws(self, gw_indices, final_cov, node_gw, counts,
                            min_cover=3, progress_cb=None):
         def _log(msg):

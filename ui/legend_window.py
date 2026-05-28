@@ -31,7 +31,6 @@ DEFAULT_LEVELS = [
     {'pr': -100, 'color': '#FF8C00'},
     {'pr': -110, 'color': '#FFD700'},
     {'pr': -120, 'color': '#00C94A'},
-    {'pr': -130, 'color': '#4f8ef7'},
 ]
 
 

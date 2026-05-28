@@ -32,6 +32,18 @@ DEFAULT_SETTINGS = {
     "map_tile"      : "CartoDB Voyager",
     "cov_n_samples" : 100,
     "prop_model"    : "smartcity",
+    # ── SNR 설정 (신규) ──────────────────────────────────────
+    "snr_margin_db" : 10.0,   # 링크 마진 기준 (dB)
+    "noise_figure_db": 6.0,   # 수신기 잡음지수 (dB)
+    "bandwidth_khz" : 125.0,  # LoRa 대역폭 (kHz)
+    
+    "tx_interval_s" : 300.0,   # Node 패킷 전송 주기 (초, 기본 5분)
+}
+
+# LoRa SF별 SNR 임계값 (dB)
+SF_SNR_THRESH = {
+    7: -7.5, 8: -10.0, 9: -12.5,
+    10: -15.0, 11: -17.5, 12: -20.0,
 }
 
 ENV_LABELS = {
@@ -124,7 +136,7 @@ class SettingsWindow(QDialog):
         super().__init__(parent)
         self.setWindowTitle("설정")
         self.setStyleSheet(STYLE)
-        self.resize(480, 620)
+        self.resize(500, 660)
         self.setWindowFlag(Qt.Window)
         self._settings = load_settings()
         self._build()
@@ -141,8 +153,8 @@ class SettingsWindow(QDialog):
         # ── 탭 1: 전파 파라미터 ──────────────────────────────
         t1 = QWidget(); fl1 = QFormLayout(t1); fl1.setSpacing(10)
 
-        self.sp_fc   = _dspin(400, 2000, 915.0, 1, " MHz", 1.0)
-        self.cb_env  = QComboBox()
+        self.sp_fc     = _dspin(400, 2000, 915.0, 1, " MHz", 1.0)
+        self.cb_env    = QComboBox()
         for k, v in ENV_LABELS.items():
             self.cb_env.addItem(f"{k} - {v}", k)
         self.sp_nsamp  = _ispin(20, 500, 100)
@@ -150,7 +162,7 @@ class SettingsWindow(QDialog):
 
         self.cb_model = QComboBox()
         self.cb_model.addItem("SmartCity LoRaScape Model", "smartcity")
-        self.cb_model.addItem("COST-231 Model",       "cost231")
+        self.cb_model.addItem("COST-231 Model",            "cost231")
 
         fl1.addRow("전파 모델",         self.cb_model)
         fl1.addRow("반송 주파수",       self.sp_fc)
@@ -192,12 +204,14 @@ class SettingsWindow(QDialog):
         self.sp_nd_hm     = _dspin(0.1,  50,   1.5,   1, " m")
         self.sp_nd_rxm    = _dspin(-160, -50, -126.6,  1, " dBm")
         self.sp_nd_indoor = _dspin(0,    30,   0.0,   1, " dB")
+        self.sp_tx_interval = _dspin(1, 3600, 300.0, 0, " 초", 10.0)
 
         fl3.addRow("수신 이득 Gr",          self.sp_nd_gr)
         fl3.addRow("수신 손실 Lr",          self.sp_nd_lr)
         fl3.addRow("안테나 높이 hm",        self.sp_nd_hm)
         fl3.addRow("최소 수신 레벨",        self.sp_nd_rxm)
         fl3.addRow("실내 투과 손실 (기본)", self.sp_nd_indoor)
+        fl3.addRow("패킷 전송 주기", self.sp_tx_interval)
 
         note3 = QLabel(
             "· 실내 투과 손실: 실외=0dB, 목조=5~10dB\n"
@@ -210,8 +224,9 @@ class SettingsWindow(QDialog):
         # ── 탭 4: 히트맵 & 지도 ─────────────────────────────
         t4 = QWidget(); fl4 = QFormLayout(t4); fl4.setSpacing(10)
 
-        # 소수점 5자리, 최솟값 0.00010, step 0.00005
         self.sp_hm_step  = _dspin(0.00010, 0.005, 0.00018, 5, "°", 0.00005)
+        self.sp_radius = _dspin(5, 50, 25.0, 1, " km")
+        
         self.chk_hm_diff = QCheckBox("Deygout 회절 포함 (정확하나 느림)")
         self.cb_tile     = QComboBox()
         for t in MAP_TILES:
@@ -220,16 +235,57 @@ class SettingsWindow(QDialog):
         fl4.addRow("히트맵 격자 간격", self.sp_hm_step)
         fl4.addRow("",               self.chk_hm_diff)
         fl4.addRow("지도 배경",       self.cb_tile)
+        fl4.addRow("히트맵 반경", self.sp_radius)
 
         note4 = QLabel(
-            "· 0.00018° ≈ 20m/격자  (매우 정밀, 매우 느림)\n"
-            "· 0.00050° ≈ 56m/격자  (정밀, 느림)\n"
-            "· 0.00100° ≈ 111m/격자 (보통, 느림)\n"
-            "· 0.000180° ≈ 167m/격자 (기본, 빠름)\n"
-            "· 0.00200° ≈ 222m/격자 (빠름, 거침)")
+            "· 0.00018° ≈ 20m/격자  (설정값, 실제 계산은 0.0005°)\n"
+            "· 0.00050° ≈ 56m/격자  (권장, 1~2분)\n"
+            "· 0.00100° ≈ 111m/격자 (빠름, 30~60초)\n"
+            "· 0.00150° ≈ 167m/격자 (매우 빠름, 10~20초)\n"
+            "※ 0.0005° 미만 설정 시 자동으로 0.0005°로 조정됩니다.")
         note4.setStyleSheet(f"color:{MUTED};font-size:10px;")
         fl4.addRow("", note4)
         tabs.addTab(t4, "🗺 히트맵/지도")
+
+        # ── 탭 5: SNR / 링크 마진 (신규) ────────────────────
+        t5 = QWidget(); fl5 = QFormLayout(t5); fl5.setSpacing(10)
+
+        self.sp_snr_margin  = _dspin(0, 30,   10.0, 1, " dB")
+        self.sp_noise_fig   = _dspin(0, 20,    6.0, 1, " dB")
+        self.sp_bandwidth   = _dspin(10, 500, 125.0, 1, " kHz", 25.0)
+
+        fl5.addRow("링크 마진 기준",  self.sp_snr_margin)
+        fl5.addRow("수신기 잡음지수", self.sp_noise_fig)
+        fl5.addRow("LoRa 대역폭",    self.sp_bandwidth)
+
+        # SF별 SNR 임계값 표시
+        snr_grp = QGroupBox("SF별 SNR 임계값 (LoRa 표준)")
+        snr_grp.setStyleSheet(
+            f"QGroupBox{{color:{MUTED};border:1px solid {BORDER};"
+            f"border-radius:6px;margin-top:6px;padding-top:8px;}}"
+            f"QGroupBox::title{{subcontrol-origin:margin;left:8px;}}")
+        snr_lay = QFormLayout(snr_grp); snr_lay.setSpacing(4)
+        SF_COLORS = {
+            7:'#FF4444', 8:'#FF8C00', 9:'#FFD700',
+            10:'#00C94A', 11:'#4f8ef7', 12:'#9B59B6',
+        }
+        for sf, thresh in SF_SNR_THRESH.items():
+            lbl_k = QLabel(f"SF{sf}")
+            lbl_k.setStyleSheet(f"color:{SF_COLORS[sf]};font-size:11px;")
+            lbl_v = QLabel(f"{thresh:.1f} dB")
+            lbl_v.setStyleSheet(f"color:{TEXT};font-size:11px;font-weight:bold;")
+            snr_lay.addRow(lbl_k, lbl_v)
+        fl5.addRow(snr_grp)
+
+        note5 = QLabel(
+            "· 링크 마진: Pr - 최소수신감도 (기본 10dB 권장)\n"
+            "· 잡음지수: 수신기 NF (일반 LoRa GW: 6dB)\n"
+            "· SNR = Pr - (열잡음 + NF)\n"
+            "· 열잡음 = -174 + 10·log10(BW) dBm\n"
+            "  (125kHz 기준: -174 + 51 = -123 dBm)")
+        note5.setStyleSheet(f"color:{MUTED};font-size:10px;")
+        fl5.addRow("", note5)
+        tabs.addTab(t5, "📶 SNR/마진")
 
         # ── 하단 버튼 ────────────────────────────────────────
         btn_row = QHBoxLayout()
@@ -263,14 +319,12 @@ class SettingsWindow(QDialog):
         model_val = s.get("prop_model", "smartcity")
         for i in range(self.cb_model.count()):
             if self.cb_model.itemData(i) == model_val:
-                self.cb_model.setCurrentIndex(i)
-                break
+                self.cb_model.setCurrentIndex(i); break
 
         env_val = s.get("env", 0)
         for i in range(self.cb_env.count()):
             if self.cb_env.itemData(i) == env_val:
-                self.cb_env.setCurrentIndex(i)
-                break
+                self.cb_env.setCurrentIndex(i); break
 
         self.sp_nsamp.setValue(s.get("n_samples", 100))
         self.sp_dorder.setValue(s.get("diff_order", 2))
@@ -289,10 +343,17 @@ class SettingsWindow(QDialog):
         self.sp_hm_step.setValue(s.get("heatmap_step", 0.00018))
         self.chk_hm_diff.setChecked(s.get("heatmap_diff", False))
 
+        self.sp_tx_interval.setValue(s.get("tx_interval_s", 300.0))
+        
         tile = s.get("map_tile", "CartoDB Voyager")
         idx  = self.cb_tile.findText(tile)
         if idx >= 0:
             self.cb_tile.setCurrentIndex(idx)
+
+        # SNR 탭
+        self.sp_snr_margin.setValue(s.get("snr_margin_db",  10.0))
+        self.sp_noise_fig.setValue(s.get("noise_figure_db",  6.0))
+        self.sp_bandwidth.setValue(s.get("bandwidth_khz",  125.0))
 
     def _collect(self) -> dict:
         return {
@@ -313,6 +374,12 @@ class SettingsWindow(QDialog):
             "heatmap_diff"  : self.chk_hm_diff.isChecked(),
             "map_tile"      : self.cb_tile.currentText(),
             "prop_model"    : self.cb_model.currentData(),
+            # SNR
+            "snr_margin_db" : self.sp_snr_margin.value(),
+            "noise_figure_db": self.sp_noise_fig.value(),
+            "bandwidth_khz" : self.sp_bandwidth.value(),
+            
+            "tx_interval_s" : self.sp_tx_interval.value(),
         }
 
     def _apply(self):

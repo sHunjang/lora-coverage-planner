@@ -6,6 +6,9 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QObject, pyqtSignal, QThread, QSize
 from PyQt5.QtGui import QCursor
+
+import json, os
+
 from ui.map_widget       import MapWidget
 from ui.gw_list_window   import GWListWindow
 from ui.node_list_window import NodeListWindow
@@ -89,6 +92,7 @@ class HeatmapWorker(QObject):
             from core.coverage import CoverageEngine
 
             eng    = CoverageEngine(self.spatial, self.env, self.fc,
+                                    n_samples=self.settings.get('n_samples', 100),
                                     settings=self.settings)
             min_rx = self.settings.get('min_rx', -126.6)
             step   = float(self.settings.get('heatmap_step', 0.0015))
@@ -109,201 +113,118 @@ class HeatmapWorker(QObject):
                 10: '#00C94A', 11: '#4f8ef7', 12: '#9B59B6',
             }
 
+            radius_km = float(self.settings.get('radius_km', 25.0))
+            
             hms = []
 
+            # ── 히트맵 계산 (단일/다중 공통) ─────────────────
+            # _nodes, _result는 settings에 담겨 eng 내부에서 자동 사용
             if len(self.gws) > 1:
                 self.sig_log.emit(
                     f"{len(self.gws)}개 GW 합성 히트맵 계산 중...")
-                pr_min = min((lv['pr'] for lv in color_levels), default=None)
                 hm = eng.heatmap_combined(
                     self.gws, min_rx, step=step,
                     cb=self.sig_log.emit,
-                    pr_min=pr_min)
-
-                ps = hm.get('ps')
-                cm = hm.get('cm')
-                contours = []
-
-                if ps is not None and cm is not None:
-                    lmin   = hm.get('lon_min', 0)
-                    latmin = hm.get('lat_min', 0)
-                    lon_ax = np.linspace(lmin,
-                                        lmin + step * ps.shape[1],
-                                        ps.shape[1])
-                    lat_ax = np.linspace(latmin,
-                                        latmin + step * ps.shape[0],
-                                        ps.shape[0])
-                    pr_m     = np.where(cm, ps, np.nan)
-                    ps_in_cm = ps[cm]
-
-                    if len(ps_in_cm) > 0:
-                        pr_min_in = float(ps_in_cm.min())
-                        pr_max_in = float(ps_in_cm.max())
-
-                        for lv in color_levels:
-                            pv = float(lv['pr'])
-                            if pv < pr_min_in or pv > pr_max_in:
-                                continue
-                            allsegs = _calc_contour_segments(
-                                lon_ax, lat_ax, pr_m, pv)
-                            if not allsegs:
-                                continue
-                            segs, lpts = [], []
-                            for col_segs in allsegs:
-                                for seg in col_segs:
-                                    if len(seg) < 4:
-                                        continue
-                                    d = np.diff(seg, axis=0)
-                                    if float(np.sqrt(
-                                            (d**2).sum(axis=1)).sum()) < step:
-                                        continue
-                                    pts = [[float(p[1]), float(p[0])]
-                                           for p in seg]
-                                    segs.append(pts)
-                                    mid = len(pts) // 2
-                                    lpts.append({
-                                        'lat' : pts[mid][0],
-                                        'lon' : pts[mid][1],
-                                        'text': f'{pv:.0f} dBm',
-                                    })
-                            if segs:
-                                contours.append({
-                                    'color'    : lv['color'],
-                                    'weight'   : 2.0,
-                                    'label'    : f'{pv:.0f} dBm',
-                                    'segments' : segs,
-                                    'label_pts': lpts,
-                                })
-
-                        sf_layers = []
-                        for sf, sens in SF_SENS.items():
-                            if not (ps[cm] >= sens).any():
-                                continue
-                            pr_sf      = np.where(cm, ps, np.nan)
-                            allsegs_sf = _calc_contour_segments(
-                                lon_ax, lat_ax, pr_sf, sens)
-                            if not allsegs_sf:
-                                continue
-                            segs_sf = []
-                            for col_segs in allsegs_sf:
-                                for seg in col_segs:
-                                    if len(seg) < 4:
-                                        continue
-                                    d = np.diff(seg, axis=0)
-                                    if float(np.sqrt(
-                                            (d**2).sum(axis=1)).sum()) < step:
-                                        continue
-                                    segs_sf.append(
-                                        [[float(p[1]), float(p[0])]
-                                         for p in seg])
-                            if segs_sf:
-                                sf_layers.append({
-                                    'sf'      : sf,
-                                    'color'   : SF_COLORS[sf],
-                                    'segments': segs_sf,
-                                    'label'   : f'SF{sf} ({sens:.1f} dBm)',
-                                })
-                        hm['sf_layers'] = sf_layers
-
-                hm['contours'] = contours
-                hms.append(hm)
-
+                    radius_km=radius_km)
             else:
-                for gw in self.gws:
-                    self.sig_log.emit(f"{gw.callsign} 히트맵 계산 중...")
-                    pr_min = min((lv['pr'] for lv in color_levels), default=None)
-                    hm = eng.heatmap(gw, min_rx, step=step,
-                                     cb=self.sig_log.emit,
-                                     pr_min=pr_min)
+                gw = self.gws[0]
+                self.sig_log.emit(f"{gw.callsign} 히트맵 계산 중...")
+                hm = eng.heatmap(
+                    gw, min_rx, step=step,
+                    cb=self.sig_log.emit,
+                    radius_km=radius_km)
 
-                    ps = hm.get('ps')
-                    cm = hm.get('cm')
-                    contours = []
+            # ── 등고선 / SF 레이어 계산 (공통) ───────────────
+            ps = hm.get('ps')
+            cm = hm.get('cm')
+            contours = []
 
-                    if ps is not None and cm is not None:
-                        lmin   = hm.get('lon_min', 0)
-                        latmin = hm.get('lat_min', 0)
-                        lon_ax = np.linspace(lmin,
-                                             lmin + step * ps.shape[1],
-                                             ps.shape[1])
-                        lat_ax = np.linspace(latmin,
-                                             latmin + step * ps.shape[0],
-                                             ps.shape[0])
-                        pr_m     = np.where(cm, ps, np.nan)
-                        ps_in_cm = ps[cm]
+            if ps is not None and cm is not None:
+                lmin     = hm.get('lon_min', 0)
+                latmin   = hm.get('lat_min', 0)
+                act_step = hm.get('step', step)
+                lon_ax   = np.linspace(lmin,
+                                    lmin + act_step * ps.shape[1],
+                                    ps.shape[1])
+                lat_ax   = np.linspace(latmin,
+                                    latmin + act_step * ps.shape[0],
+                                    ps.shape[0])
+                pr_m     = np.where(cm, ps, np.nan)
+                ps_in_cm = ps[cm]
 
-                        if len(ps_in_cm) > 0:
-                            pr_min_in = float(ps_in_cm.min())
-                            pr_max_in = float(ps_in_cm.max())
+                if len(ps_in_cm) > 0:
+                    pr_min_in = float(ps_in_cm.min())
+                    pr_max_in = float(ps_in_cm.max())
 
-                            for lv in color_levels:
-                                pv = float(lv['pr'])
-                                if pv < pr_min_in or pv > pr_max_in:
+                    # 등고선
+                    for lv in color_levels:
+                        pv = float(lv['pr'])
+                        if pv < pr_min_in or pv > pr_max_in:
+                            continue
+                        allsegs = _calc_contour_segments(
+                            lon_ax, lat_ax, pr_m, pv)
+                        if not allsegs:
+                            continue
+                        segs, lpts = [], []
+                        for col_segs in allsegs:
+                            for seg in col_segs:
+                                if len(seg) < 4:
                                     continue
-                                allsegs = _calc_contour_segments(
-                                    lon_ax, lat_ax, pr_m, pv)
-                                if not allsegs:
+                                d = np.diff(seg, axis=0)
+                                if float(np.sqrt(
+                                        (d**2).sum(axis=1)).sum()) < act_step:
                                     continue
-                                segs, lpts = [], []
-                                for col_segs in allsegs:
-                                    for seg in col_segs:
-                                        if len(seg) < 4:
-                                            continue
-                                        d = np.diff(seg, axis=0)
-                                        if float(np.sqrt(
-                                                (d**2).sum(axis=1)).sum()) < step:
-                                            continue
-                                        pts = [[float(p[1]), float(p[0])]
-                                               for p in seg]
-                                        segs.append(pts)
-                                        mid = len(pts) // 2
-                                        lpts.append({
-                                            'lat' : pts[mid][0],
-                                            'lon' : pts[mid][1],
-                                            'text': f'{pv:.0f} dBm',
-                                        })
-                                if segs:
-                                    contours.append({
-                                        'color'    : lv['color'],
-                                        'weight'   : 2.0,
-                                        'label'    : f'{pv:.0f} dBm',
-                                        'segments' : segs,
-                                        'label_pts': lpts,
-                                    })
+                                pts = [[float(p[1]), float(p[0])]
+                                    for p in seg]
+                                segs.append(pts)
+                                mid = len(pts) // 2
+                                lpts.append({
+                                    'lat' : pts[mid][0],
+                                    'lon' : pts[mid][1],
+                                    'text': f'{pv:.0f} dBm',
+                                })
+                        if segs:
+                            contours.append({
+                                'color'    : lv['color'],
+                                'weight'   : 2.0,
+                                'label'    : f'{pv:.0f} dBm',
+                                'segments' : segs,
+                                'label_pts': lpts,
+                            })
 
-                            sf_layers = []
-                            for sf, sens in SF_SENS.items():
-                                if not (ps[cm] >= sens).any():
+                    # SF 레이어
+                    sf_layers = []
+                    for sf, sens in SF_SENS.items():
+                        if not (ps[cm] >= sens).any():
+                            continue
+                        pr_sf      = np.where(cm, ps, np.nan)
+                        allsegs_sf = _calc_contour_segments(
+                            lon_ax, lat_ax, pr_sf, sens)
+                        if not allsegs_sf:
+                            continue
+                        segs_sf = []
+                        for col_segs in allsegs_sf:
+                            for seg in col_segs:
+                                if len(seg) < 4:
                                     continue
-                                pr_sf      = np.where(cm, ps, np.nan)
-                                allsegs_sf = _calc_contour_segments(
-                                    lon_ax, lat_ax, pr_sf, sens)
-                                if not allsegs_sf:
+                                d = np.diff(seg, axis=0)
+                                if float(np.sqrt(
+                                        (d**2).sum(axis=1)).sum()) < act_step:
                                     continue
-                                segs_sf = []
-                                for col_segs in allsegs_sf:
-                                    for seg in col_segs:
-                                        if len(seg) < 4:
-                                            continue
-                                        d = np.diff(seg, axis=0)
-                                        if float(np.sqrt(
-                                                (d**2).sum(axis=1)).sum()) < step:
-                                            continue
-                                        segs_sf.append(
-                                            [[float(p[1]), float(p[0])]
-                                             for p in seg])
-                                if segs_sf:
-                                    sf_layers.append({
-                                        'sf'      : sf,
-                                        'color'   : SF_COLORS[sf],
-                                        'segments': segs_sf,
-                                        'label'   : f'SF{sf} ({sens:.1f} dBm)',
-                                    })
-                            hm['sf_layers'] = sf_layers
+                                segs_sf.append(
+                                    [[float(p[1]), float(p[0])]
+                                    for p in seg])
+                        if segs_sf:
+                            sf_layers.append({
+                                'sf'      : sf,
+                                'color'   : SF_COLORS[sf],
+                                'segments': segs_sf,
+                                'label'   : f'SF{sf} ({sens:.1f} dBm)',
+                            })
+                    hm['sf_layers'] = sf_layers
 
-                    hm['contours'] = contours
-                    hms.append(hm)
-
+            hm['contours'] = contours
+            hms.append(hm)
             self.sig_done.emit(hms)
 
         except Exception:
@@ -349,12 +270,145 @@ class MainWindow(QMainWindow):
         self._gw_win        = None
         self._node_win      = None
         self._opt_win       = None
+        self._history      = []    # Snapshot 히스토리 (최대 10개)
+        self._compare_win  = None  # CompareWindow 인스턴스
 
         from ui.settings_window import load_settings
         self._settings = load_settings()
 
         self._build_ui()
         self._load_spatial()
+        
+        self._load_session()
+
+    def closeEvent(self, event):
+            self._save_session()
+            event.accept()
+
+    def _save_session(self):
+            """종료 시 GW/Node 목록을 session.json에 저장."""
+            try:
+                gws   = self._gw_win.get_gws()    if self._gw_win   else []
+                nodes = self._node_win.get_nodes() if self._node_win else []
+
+                data = {
+                    'gws': [
+                        {
+                            'callsign': g.callsign,
+                            'lon'     : float(g.lon),
+                            'lat'     : float(g.lat),
+                            'pt_dbm'  : float(g.pt_dbm),
+                            'gt_dbi'  : float(g.gt_dbi),
+                            'lt_db'   : float(g.lt_db),
+                            'hb_m'    : float(g.hb_m),
+                            'enabled' : bool(g.enabled),
+                        }
+                        for g in gws
+                    ],
+                    'nodes': [
+                        {
+                            'callsign'      : n.callsign,
+                            'lon'           : float(n.lon),
+                            'lat'           : float(n.lat),
+                            'gr_dbi'        : float(n.gr_dbi),
+                            'lr_db'         : float(n.lr_db),
+                            'hm_m'          : float(n.hm_m),
+                            'min_rx_dbm'    : float(n.min_rx_dbm),
+                            'indoor_loss_db': float(getattr(n, 'indoor_loss_db', 0.0)),
+                        }
+                        for n in nodes
+                    ],
+                }
+
+                session_path = os.path.join(
+                    os.path.dirname(os.path.abspath(__file__)),
+                    '..', 'session.json')
+                with open(session_path, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+
+                print(f"[SESSION] 저장 완료: GW {len(gws)}개, Node {len(nodes)}개")
+
+            except Exception as e:
+                print(f"[SESSION] 저장 실패: {e}")
+
+    def _load_session(self):
+            """시작 시 session.json에서 GW/Node 목록 복원."""
+            try:
+                session_path = os.path.join(
+                    os.path.dirname(os.path.abspath(__file__)),
+                    '..', 'session.json')
+
+                if not os.path.exists(session_path):
+                    return
+
+                with open(session_path, encoding='utf-8') as f:
+                    data = json.load(f)
+
+                gws   = data.get('gws',   [])
+                nodes = data.get('nodes', [])
+
+                if not gws and not nodes:
+                    return
+
+                from core.coverage import GWEntry, NodeEntry
+
+                # GW 복원
+                if gws:
+                    if self._gw_win is None:
+                        from ui.gw_list_window import GWListWindow
+                        self._gw_win = GWListWindow(self)
+                        self._gw_win.sig_coverage_requested.connect(self._run_heatmap)
+                        self._gw_win.sig_coverage_clear.connect(self._clear_heatmap)
+                        self._gw_win.sig_coverage_analyze.connect(self._run_coverage)
+                        self._gw_win.sig_map_refresh.connect(self._refresh_map)
+                        self._gw_win.sig_env_map_requested.connect(self._run_env_map)
+
+                    self._gw_win._gws = [
+                        GWEntry(
+                            callsign = g.get('callsign', 'GW'),
+                            lon      = float(g.get('lon', 127.1)),
+                            lat      = float(g.get('lat', 37.4)),
+                            pt_dbm   = float(g.get('pt_dbm', 14.0)),
+                            gt_dbi   = float(g.get('gt_dbi', 2.15)),
+                            lt_db    = float(g.get('lt_db', 0.0)),
+                            hb_m     = float(g.get('hb_m', 15.0)),
+                            enabled  = bool(g.get('enabled', True)),
+                        )
+                        for g in gws
+                    ]
+                    self._gw_win._refresh_table(suppress_map=True)
+
+                # Node 복원
+                if nodes:
+                    if self._node_win is None:
+                        from ui.node_list_window import NodeListWindow
+                        self._node_win = NodeListWindow(self)
+                        self._node_win.sig_map_refresh.connect(self._refresh_map)
+
+                    self._node_win._nodes = [
+                        NodeEntry(
+                            callsign       = n.get('callsign', 'Node'),
+                            lon            = float(n.get('lon', 127.1)),
+                            lat            = float(n.get('lat', 37.4)),
+                            gr_dbi         = float(n.get('gr_dbi', 2.15)),
+                            lr_db          = float(n.get('lr_db', 0.0)),
+                            hm_m           = float(n.get('hm_m', 1.5)),
+                            min_rx_dbm     = float(n.get('min_rx_dbm', -126.6)),
+                            indoor_loss_db = float(n.get('indoor_loss_db', 0.0)),
+                        )
+                        for n in nodes
+                    ]
+                    self._node_win._refresh_table(suppress_map=True)
+
+                # 지도 갱신
+                self._refresh_map()
+
+                self.status.showMessage(
+                    f"세션 복원 완료: GW {len(gws)}개, Node {len(nodes)}개")
+                print(f"[SESSION] 복원 완료: GW {len(gws)}개, Node {len(nodes)}개")
+
+            except Exception as e:
+                print(f"[SESSION] 복원 실패: {e}")
 
     def _build_ui(self):
         tb = QToolBar()
@@ -367,25 +421,33 @@ class MainWindow(QMainWindow):
         act_node   = QAction("📶  단말 목록",     self)
         act_opt    = QAction("⚙   GW 최적 배치", self)
         act_legend = QAction("🎨  범례 설정",     self)
+        act_graph = QAction("📈  그래프", self)
         act_cfg    = QAction("🔧  설정",           self)
         act_dist   = QAction("📏  거리 측정", self, checkable=True)
         act_save   = QAction("💾  결과 저장",      self)
         act_load   = QAction("📂  결과 불러오기",  self)
+        act_report = QAction("📄  리포트",  self)
+        act_manual  = QAction("📖  매뉴얼", self)
+        act_compare = QAction("📊  결과 비교", self)
 
-        for a in [act_gw, act_node, act_opt, act_legend, act_cfg,
-                  act_dist, act_save, act_load]:
+        for a in [act_gw, act_node, act_opt, act_legend, act_graph, act_cfg,
+                  act_dist, act_save, act_load, act_report, act_manual, act_compare]:
             tb.addAction(a)
 
         act_gw.triggered.connect(self._open_gw_list)
         act_node.triggered.connect(self._open_node_list)
         act_opt.triggered.connect(self._open_optimize)
         act_legend.triggered.connect(self._open_legend)
+        act_graph.triggered.connect(self._open_graph)
         act_dist.triggered.connect(self._toggle_measure)
         self._measuring   = False
         self._measure_pts = []
         act_cfg.triggered.connect(self._open_settings)
         act_save.triggered.connect(self._save_result)
         act_load.triggered.connect(self._load_result)
+        act_report.triggered.connect(self._open_report)
+        act_manual.triggered.connect(self._open_manual)
+        act_compare.triggered.connect(self._open_compare)
 
         from PyQt5.QtWidgets import QSplitter
         splitter = QSplitter(Qt.Horizontal)
@@ -417,19 +479,11 @@ class MainWindow(QMainWindow):
     # ── 창 열기 ─────────────────────────────────────────────
 
     def _open_gw_list(self):
-        if self._gw_win is None:
-            self._gw_win = GWListWindow(self)
-            self._gw_win.sig_coverage_requested.connect(self._run_heatmap)
-            self._gw_win.sig_coverage_clear.connect(self._clear_heatmap)
-            self._gw_win.sig_coverage_analyze.connect(self._run_coverage)
-            self._gw_win.sig_map_refresh.connect(self._refresh_map)
-            self._gw_win.sig_env_map_requested.connect(self._run_env_map)
+        self._ensure_gw_win()
         self._gw_win.show(); self._gw_win.raise_()
 
     def _open_node_list(self):
-        if self._node_win is None:
-            self._node_win = NodeListWindow(self)
-            self._node_win.sig_map_refresh.connect(self._refresh_map)
+        self._ensure_node_win()
         self._node_win.show(); self._node_win.raise_()
 
     def _open_settings(self):
@@ -483,6 +537,104 @@ class MainWindow(QMainWindow):
         self.status.showMessage(
             f"범례 업데이트 완료 — {len(levels)}개 레벨 | "
             f"히트맵 재계산 시 반영됩니다.")
+        
+    def _open_report(self):
+            from ui.report_window import ReportWindow
+            gws   = self._gw_win.get_gws()    if self._gw_win   else []
+            nodes = self._node_win.get_nodes() if self._node_win else []
+            dlg   = ReportWindow(
+                result   = self._result,
+                gws      = gws,
+                nodes    = nodes,
+                heatmaps = self._heatmaps,
+                settings = self._settings,
+                parent   = self,
+            )
+            dlg.show()
+
+    def _open_graph(self):
+        if self._result is None:
+            self.status.showMessage("커버리지 분석을 먼저 실행하세요.")
+            return
+        from ui.graph_window import GraphWindow
+        gws   = self._gw_win.get_gws()    if self._gw_win   else []
+        nodes = self._node_win.get_nodes() if self._node_win else []
+        dlg   = GraphWindow(
+            result = self._result,
+            gws    = gws,
+            nodes  = nodes,
+            parent = self,
+        )
+        dlg.show()
+
+    def _open_manual(self):
+        from ui.manual_window import ManualWindow
+        gws   = self._gw_win.get_gws()    if self._gw_win   else []
+        nodes = self._node_win.get_nodes() if self._node_win else []
+        dlg   = ManualWindow(
+            main_window = self,
+            result      = self._result,
+            gws         = gws,
+            nodes       = nodes,
+            settings    = self._settings,
+            parent      = self,
+        )
+        dlg.show()
+
+    def _add_snapshot(self, result, gws, nodes):
+            """분석 결과를 히스토리에 자동 저장 (최대 10개)."""
+            from ui.compare_window import Snapshot
+            n_gws = len(gws)
+            pct   = result.coverage_pct
+            label = f"GW {n_gws}개 | {pct:.1f}%"
+            snap  = Snapshot(label, result, list(gws), list(nodes))
+            self._history.insert(0, snap)
+            if len(self._history) > 10:
+                self._history.pop()
+            if self._compare_win and self._compare_win.isVisible():
+                self._compare_win._history = self._history
+                self._compare_win._refresh_list()
+
+    def _open_compare(self):
+        """비교 창 열기."""
+        if not self._history:
+            self.status.showMessage(
+                "커버리지 분석을 먼저 실행하세요. "
+                "분석할 때마다 히스토리에 자동 저장됩니다.")
+            return
+        if self._compare_win is None:
+            from ui.compare_window import CompareWindow
+            self._compare_win = CompareWindow(self._history, parent=self)
+            self._compare_win.sig_load_snapshot.connect(
+                self._on_load_snapshot)
+        else:
+            self._compare_win._history = self._history
+            self._compare_win._refresh_list()
+        self._compare_win.show()
+        self._compare_win.raise_()
+
+    def _on_load_snapshot(self, snap):
+        """히스토리 스냅샷을 메인 창에 복원."""
+        self._result = snap.result
+        self._ensure_gw_win()
+        self._gw_win._gws = list(snap.gws)
+        self._gw_win._refresh_table(suppress_map=True)
+        self._ensure_node_win()
+        self._node_win._nodes = list(snap.nodes)
+        self._node_win._refresh_table(suppress_map=True)
+        self.map_w.refresh(
+            gws=snap.gws, nodes=snap.nodes,
+            result=snap.result,
+            heatmaps=[], selected_gws=[])
+        self.result_panel.update_result(snap.result, snap.gws)
+        if self._node_win:
+            self._node_win.update_result(snap.result)
+        pct = snap.result.coverage_pct
+        self.lbl.setText(
+            f"커버리지: {snap.result.n_covered}/{snap.result.n_total} "
+            f"({pct:.1f}%)")
+        self.status.showMessage(
+            f"'{snap.label}' 복원 완료 — {pct:.1f}%")
 
     # ── 커버리지 분석 ────────────────────────────────────────
     def _run_coverage(self, gws):
@@ -536,6 +688,8 @@ class MainWindow(QMainWindow):
         self.lbl.setText(
             f"커버리지: {result.n_covered}/{result.n_total} ({pct:.1f}%)")
         self.status.showMessage(f"커버리지 분석 완료: {pct:.1f}%")
+        
+        self._add_snapshot(result, gws, nodes) 
 
     # ── 지도 갱신 ────────────────────────────────────────────
 
@@ -604,71 +758,173 @@ class MainWindow(QMainWindow):
     # ── 우클릭 컨텍스트 메뉴 ────────────────────────────────
 
     def _on_map_right_clicked(self, lon: float, lat: float):
-        from PyQt5.QtWidgets import QMenu
-        from core.coverage import GWEntry, NodeEntry
+            from PyQt5.QtWidgets import QMenu, QAction
+            from PyQt5.QtGui import QCursor
+            from PyQt5.QtWidgets import QApplication
+            from core.coverage import GWEntry, NodeEntry
 
-        menu = QMenu(self)
-        menu.setStyleSheet("""
-            QMenu {
-                background:#1e2130; color:#e0e4ef;
-                border:1px solid #2a2f3b; border-radius:6px;
-                padding:4px;
-            }
-            QMenu::item { padding:6px 20px; border-radius:4px; }
-            QMenu::item:selected { background:#253a5a; color:#7ab8e8; }
-            QMenu::separator { height:1px; background:#2a2f3b; margin:4px 8px; }
-        """)
+            menu = QMenu(self)
+            menu.setStyleSheet("""
+                QMenu {
+                    background:#1e2130; color:#e0e4ef;
+                    border:1px solid #2a2f3b; border-radius:6px;
+                    padding:4px;
+                }
+                QMenu::item {
+                    padding:7px 22px; border-radius:4px;
+                    font-size:12px;
+                }
+                QMenu::item:selected { background:#253a5a; color:#7ab8e8; }
+                QMenu::item:disabled { color:#3a4060; }
+                QMenu::separator { height:1px; background:#2a2f3b; margin:4px 8px; }
+            """)
 
-        lbl = menu.addAction(f"📍 ({lat:.5f}, {lon:.5f})")
-        lbl.setEnabled(False)
-        menu.addSeparator()
-        act_gw   = menu.addAction("📡  이 위치에 GW 추가")
-        act_node = menu.addAction("📶  이 위치에 단말기 추가")
+            # ── 좌표 표시 (비활성) ────────────────────────────
+            lbl = menu.addAction(f"📍  {lat:.5f}, {lon:.5f}")
+            lbl.setEnabled(False)
+            menu.addSeparator()
 
-        action = menu.exec_(QCursor.pos())
+            # ── GW / Node 추가 ────────────────────────────────
+            act_gw   = menu.addAction("📡  이 위치에 GW 추가")
+            act_node = menu.addAction("📶  이 위치에 단말기 추가")
+            menu.addSeparator()
 
-        if action == act_gw:
-            if self._gw_win is None:
-                self._gw_win = GWListWindow(self)
-                self._gw_win.sig_coverage_requested.connect(self._run_heatmap)
-                self._gw_win.sig_coverage_clear.connect(self._clear_heatmap)
-                self._gw_win.sig_coverage_analyze.connect(self._run_coverage)
-                self._gw_win.sig_map_refresh.connect(self._refresh_map)
-                self._gw_win.sig_env_map_requested.connect(self._run_env_map)
-            s  = self._settings
-            n  = len(self._gw_win._gws) + 1
-            gw = GWEntry(
-                callsign = f"GW{n}",
-                lon=lon, lat=lat,
-                pt_dbm   = s.get('gw_pt_dbm', 14.0),
-                gt_dbi   = s.get('gw_gt_dbi', 2.15),
-                lt_db    = s.get('gw_lt_db',  0.0),
-                hb_m     = s.get('gw_hb_m',   15.0),
-            )
-            self._gw_win._gws.append(gw)
-            self._gw_win._refresh_table(suppress_map=True)
-            self._refresh_map()
-            self.status.showMessage(f"GW{n} 추가 → ({lat:.5f}, {lon:.5f})")
+            # ── 커버리지 분석 ─────────────────────────────────
+            gws   = self._gw_win.get_gws()    if self._gw_win   else []
+            nodes = self._node_win.get_nodes() if self._node_win else []
+            act_cov = menu.addAction("🔄  커버리지 분석 실행")
+            act_cov.setEnabled(bool(gws) and bool(nodes))
 
-        elif action == act_node:
-            if self._node_win is None:
-                self._node_win = NodeListWindow(self)
-                self._node_win.sig_map_refresh.connect(self._refresh_map)
-            s  = self._settings
-            n  = len(self._node_win._nodes) + 1
-            nd = NodeEntry(
-                callsign       = f"Node{n}",
-                lon=lon, lat=lat,
-                gr_dbi         = s.get('nd_gr_dbi', 2.15),
-                lr_db          = s.get('nd_lr_db',  0.0),
-                hm_m           = s.get('nd_hm_m',   1.5),
-                min_rx_dbm     = s.get('nd_min_rx', -126.6),
-                indoor_loss_db = s.get('nd_indoor_loss', 0.0),
-            )
-            self._node_win._nodes.append(nd)
-            self._node_win._refresh_table(suppress_map=True)
-            self._refresh_map()
-            self.status.showMessage(f"Node{n} 추가 → ({lat:.5f}, {lon:.5f})")
+            # ── 히트맵 계산 ───────────────────────────────────
+            act_hm = menu.addAction("🗺  히트맵 계산")
+            act_hm.setEnabled(bool(gws))
+            menu.addSeparator()
+
+            # ── 거리 측정 ─────────────────────────────────────
+            if self._measuring:
+                act_measure = menu.addAction("📏  거리 측정 종료")
+            else:
+                act_measure = menu.addAction("📏  거리 측정 시작")
+
+            act_measure_clear = menu.addAction("✕  측정 초기화")
+            act_measure_clear.setEnabled(bool(self._measure_pts))
+            menu.addSeparator()
+
+            # ── 좌표 복사 ─────────────────────────────────────
+            act_copy_latlon = menu.addAction(
+                f"📋  좌표 복사 ({lat:.6f}, {lon:.6f})")
+            act_copy_lonlat = menu.addAction(
+                f"📋  GeoJSON 좌표 복사 ({lon:.6f}, {lat:.6f})")
+
+            # ── 메뉴 실행 ─────────────────────────────────────
+            action = menu.exec_(QCursor.pos())
+            if action is None:
+                return
+
+            # ── GW 추가 ───────────────────────────────────────
+            if action == act_gw:
+                self._ensure_gw_win()
+                s = self._settings
+                n = len(self._gw_win._gws) + 1
+                gw = GWEntry(
+                    callsign = f"GW{n}",
+                    lon=lon, lat=lat,
+                    pt_dbm   = s.get('gw_pt_dbm', 14.0),
+                    gt_dbi   = s.get('gw_gt_dbi', 2.15),
+                    lt_db    = s.get('gw_lt_db',  0.0),
+                    hb_m     = s.get('gw_hb_m',   15.0),
+                )
+                self._gw_win._gws.append(gw)
+                self._gw_win._refresh_table(suppress_map=True)
+                self._refresh_map()
+                self.status.showMessage(
+                    f"GW{n} 추가 → ({lat:.5f}, {lon:.5f})")
+
+            # ── Node 추가 ─────────────────────────────────────
+            elif action == act_node:
+                self._ensure_node_win()
+                s = self._settings
+                n = len(self._node_win._nodes) + 1
+                nd = NodeEntry(
+                    callsign       = f"Node{n}",
+                    lon=lon, lat=lat,
+                    gr_dbi         = s.get('nd_gr_dbi', 2.15),
+                    lr_db          = s.get('nd_lr_db',  0.0),
+                    hm_m           = s.get('nd_hm_m',   1.5),
+                    min_rx_dbm     = s.get('nd_min_rx', -126.6),
+                    indoor_loss_db = s.get('nd_indoor_loss', 0.0),
+                )
+                self._node_win._nodes.append(nd)
+                self._node_win._refresh_table(suppress_map=True)
+                self._refresh_map()
+                self.status.showMessage(
+                    f"Node{n} 추가 → ({lat:.5f}, {lon:.5f})")
+
+            # ── 커버리지 분석 ─────────────────────────────────
+            elif action == act_cov:
+                active_gws = [g for g in gws if g.enabled]
+                if active_gws:
+                    self._run_coverage(active_gws)
+                else:
+                    self.status.showMessage("활성 GW가 없습니다.")
+
+            # ── 히트맵 계산 ───────────────────────────────────
+            elif action == act_hm:
+                active_gws = [g for g in gws if g.enabled]
+                if active_gws:
+                    self._run_heatmap(active_gws, {})
+                else:
+                    self.status.showMessage("활성 GW가 없습니다.")
+
+            # ── 거리 측정 시작/종료 ───────────────────────────
+            elif action == act_measure:
+                if self._measuring:
+                    # 종료
+                    self._measuring = False
+                    self._refresh_map()
+                    self.status.showMessage("거리 측정 모드 종료")
+                else:
+                    # 시작 — 클릭한 위치를 첫 번째 점으로 추가
+                    self._measuring = True
+                    self._measure_pts = [(lon, lat)]
+                    self._refresh_map()
+                    self.status.showMessage(
+                        f"거리 측정 시작: P1 ({lat:.5f}, {lon:.5f}) — "
+                        f"다음 점을 클릭하세요.")
+
+            # ── 측정 초기화 ───────────────────────────────────
+            elif action == act_measure_clear:
+                self._measure_pts = []
+                self._refresh_map()
+                self.status.showMessage("거리 측정 초기화")
+                self.lbl.setText("─")
+
+            # ── 좌표 복사 ─────────────────────────────────────
+            elif action == act_copy_latlon:
+                QApplication.clipboard().setText(f"{lat:.6f}, {lon:.6f}")
+                self.status.showMessage(
+                    f"클립보드 복사: {lat:.6f}, {lon:.6f}")
+
+            elif action == act_copy_lonlat:
+                QApplication.clipboard().setText(f"{lon:.6f}, {lat:.6f}")
+                self.status.showMessage(
+                    f"클립보드 복사: {lon:.6f}, {lat:.6f}")
+
+    def _ensure_gw_win(self):
+        """GWListWindow가 없으면 생성."""
+        if self._gw_win is None:
+            self._gw_win = GWListWindow(self)
+            self._gw_win.sig_coverage_requested.connect(self._run_heatmap)
+            self._gw_win.sig_coverage_clear.connect(self._clear_heatmap)
+            self._gw_win.sig_coverage_analyze.connect(self._run_coverage)
+            self._gw_win.sig_map_refresh.connect(self._refresh_map)
+            self._gw_win.sig_env_map_requested.connect(self._run_env_map)
+
+    def _ensure_node_win(self):
+        """NodeListWindow가 없으면 생성."""
+        if self._node_win is None:
+            self._node_win = NodeListWindow(self)
+            self._node_win.sig_map_refresh.connect(self._refresh_map)
 
     # ── 히트맵 ──────────────────────────────────────────────
     def _start_worker(self, worker):
@@ -695,31 +951,41 @@ class MainWindow(QMainWindow):
         t.start()
 
     def _run_heatmap(self, gws, settings):
-        if self.spatial is None:
-            self.status.showMessage("공간 데이터 로드 중..."); return
+            if self.spatial is None:
+                self.status.showMessage("공간 데이터 로드 중..."); return
 
-        merged = dict(self._settings)
-        merged.update(settings)
-        if self._legend_levels:
-            merged['color_levels'] = self._legend_levels
-        if 'color_levels' in self._settings:
-            merged['color_levels'] = self._settings['color_levels']
+            merged = dict(self._settings)
+            merged.update(settings)
+            if self._legend_levels:
+                merged['color_levels'] = self._legend_levels
+            if 'color_levels' in self._settings:
+                merged['color_levels'] = self._settings['color_levels']
 
-        # ── GW별 히트맵 색상 맵 생성 ─────────────────────────
-        active_gws = [g for g in gws if g.enabled]
-        merged['gw_color_map'] = {
-            g.callsign: GW_HEX_COLORS[i % len(GW_HEX_COLORS)]
-            for i, g in enumerate(active_gws)
-        }
+            # ── gw_color_map 생성 (버그 수정: set → list) ────────
+            GW_HEX_COLORS = [
+                '#e74c3c', '#3498db', '#2ecc71', '#9b59b6', '#e67e22',
+                '#c0392b', '#2980b9', '#27ae60', '#8e44ad', '#17a589',
+                '#e91e8c', '#5dade2', '#58d68d', '#f0e68c', '#2c3e50',
+            ]
+            active_gws = [g for g in gws if g.enabled]
+            merged['gw_color_map'] = {
+                g.callsign: GW_HEX_COLORS[i % len(GW_HEX_COLORS)]
+                for i, g in enumerate(active_gws)
+            }
 
-        env = merged.get('env', 2) or 2
-        fc  = merged.get('fc_mhz', 915.0)
+            # ── 커버리지 결과와 Node 전달 (보간 히트맵용) ────────────
+            nodes = self._node_win.get_nodes() if self._node_win else []
+            # merged['_nodes']  = nodes
+            # merged['_result'] = self._result   # None이면 직접 계산 방식 사용
 
-        self.status.showMessage(
-            f"히트맵 계산 중: {', '.join(g.callsign for g in gws)}")
-        w = HeatmapWorker(self.spatial, gws, merged, env=env, fc=fc)
-        w.sig_done.connect(self._on_heatmap_done)
-        self._start_worker(w)
+            env = merged.get('env', 2) or 2
+            fc  = merged.get('fc_mhz', 915.0)
+
+            self.status.showMessage(
+                f"히트맵 계산 중: {', '.join(g.callsign for g in gws)}")
+            w = HeatmapWorker(self.spatial, gws, merged, env=env, fc=fc)
+            w.sig_done.connect(self._on_heatmap_done)
+            self._start_worker(w)
 
     def _on_heatmap_done(self, hms):
         self._heatmaps = hms
@@ -734,11 +1000,27 @@ class MainWindow(QMainWindow):
         self.lbl.setText(f"히트맵: {', '.join(sel)}")
         self.status.showMessage(f"히트맵 완료: {', '.join(sel)}")
 
-        # 히트맵 완료 후 커버리지 자동 실행
-        active_gws = [g for g in gws if g.enabled]
-        if active_gws and nodes:
-            self.status.showMessage("히트맵 완료 — 커버리지 분석 자동 시작...")
-            self._run_coverage(active_gws)
+        # ── 히트맵에 사용된 GW로만 커버리지 분석 ────────────────
+        if nodes:
+            if 'COMBINED' in sel:
+                # hms에 저장된 gws 목록 사용
+                hm_gw_callsigns = set()
+                for hm in hms:
+                    if hm.get('type') == 'combined':
+                        hm_gw_callsigns.update(hm.get('gws', []))
+                cov_gws = [g for g in gws
+                        if g.callsign in hm_gw_callsigns] \
+                        if hm_gw_callsigns else \
+                        [g for g in gws if g.enabled]
+            else:
+                hm_callsigns = set(sel)
+                cov_gws = [g for g in gws if g.callsign in hm_callsigns]
+
+            if cov_gws:
+                self.status.showMessage(
+                    f"히트맵 완료 — 커버리지 분석 자동 시작 "
+                    f"({', '.join(g.callsign for g in cov_gws)})...")
+                self._run_coverage(cov_gws)
 
     # ── 최적 배치 결과 ───────────────────────────────────────
 

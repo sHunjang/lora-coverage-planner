@@ -1,5 +1,4 @@
-# ui/node_list_window.py 전체
-
+# ui/node_list_window.py
 from __future__ import annotations
 import csv
 import numpy as np
@@ -10,10 +9,24 @@ from PyQt5.QtWidgets import (
     QSpinBox, QFormLayout, QGroupBox,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QColor
 from core.coverage import NodeEntry
 from ui.dialogs import NodeParamDialog, DARK, PANEL, TEXT, MUTED, BORDER, STYLE_DLG
 
-COLS = ['Callsign', '경도', '위도', 'Gr(dBi)', 'Lr(dB)', '높이(m)', '최소수신(dBm)', '연결 GW', '수신전력(dBm)', '상태']
+# SF 감도 기준
+SF_SENS = {
+    7: -123.0, 8: -126.0, 9: -129.0,
+    10: -132.0, 11: -134.5, 12: -137.0,
+}
+SF_COLORS = {
+    7: '#FF4444', 8: '#FF8C00', 9: '#FFD700',
+    10: '#00C94A', 11: '#4f8ef7', 12: '#9B59B6',
+}
+
+COLS = [
+    'Callsign', '경도', '위도', 'Gr(dBi)', 'Lr(dB)', '높이(m)',
+    '최소수신(dBm)', '연결 GW', '수신전력(dBm)', 'SF 등급', '상태'
+]
 
 BTN = ("QPushButton{background:#1c2a3a;color:#7ab8e8;"
        "border:1px solid #2a4a6a;border-radius:4px;"
@@ -31,6 +44,16 @@ BTN_PURPLE = ("QPushButton{background:#2a1a3a;color:#c87ae8;"
               "border:1px solid #5a2a8a;border-radius:4px;"
               "padding:5px 12px;font-size:11px;}"
               "QPushButton:hover{background:#3a2050;}")
+
+
+def _pr_to_sf(pr: float) -> str:
+    """수신전력으로 SF 등급 판별."""
+    if pr <= -999:
+        return "─"
+    for sf in sorted(SF_SENS.keys()):
+        if pr >= SF_SENS[sf]:
+            return f"SF{sf}"
+    return "불가"
 
 
 # ── 랜덤 배치 다이얼로그 ─────────────────────────────────────
@@ -106,7 +129,7 @@ class NodeListWindow(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Node(단말) 목록")
         self.setStyleSheet(STYLE_DLG)
-        self.resize(1100, 480)
+        self.resize(1200, 480)
         self.setWindowFlag(Qt.Window)
         self._nodes: list[NodeEntry] = []
         self._result = None
@@ -118,13 +141,13 @@ class NodeListWindow(QDialog):
         lay.setSpacing(6)
 
         top = QHBoxLayout()
-        self.btn_add  = QPushButton("+ Node 추가");    self.btn_add.setStyleSheet(BTN_GREEN)
-        self.btn_del  = QPushButton("- 선택 삭제");    self.btn_del.setStyleSheet(BTN_RED)
-        self.btn_rnd  = QPushButton("🎲 랜덤 배치");   self.btn_rnd.setStyleSheet(BTN_PURPLE)
+        self.btn_add    = QPushButton("+ Node 추가");     self.btn_add.setStyleSheet(BTN_GREEN)
+        self.btn_del    = QPushButton("- 선택 삭제");     self.btn_del.setStyleSheet(BTN_RED)
+        self.btn_rnd    = QPushButton("🎲 랜덤 배치");    self.btn_rnd.setStyleSheet(BTN_PURPLE)
         self.btn_detail = QPushButton("📋 연결 GW 보기"); self.btn_detail.setStyleSheet(BTN)
-        self.btn_imp  = QPushButton("CSV 가져오기");    self.btn_imp.setStyleSheet(BTN)
-        self.btn_exp  = QPushButton("CSV 내보내기");    self.btn_exp.setStyleSheet(BTN)
-        self.btn_clr_all  = QPushButton("✕ 전체 삭제");    self.btn_clr_all.setStyleSheet(BTN_RED)
+        self.btn_imp    = QPushButton("CSV 가져오기");     self.btn_imp.setStyleSheet(BTN)
+        self.btn_exp    = QPushButton("CSV 내보내기");     self.btn_exp.setStyleSheet(BTN)
+        self.btn_clr_all = QPushButton("✕ 전체 삭제");   self.btn_clr_all.setStyleSheet(BTN_RED)
 
         for b in [self.btn_add, self.btn_del, self.btn_rnd,
                   self.btn_detail, self.btn_imp, self.btn_exp, self.btn_clr_all]:
@@ -145,13 +168,12 @@ class NodeListWindow(QDialog):
         self.tbl.doubleClicked.connect(self._on_double_click)
         lay.addWidget(self.tbl)
 
-        # 하단 정보
         bot = QHBoxLayout()
         self.lbl_count = QLabel("Node: 0개")
         self.lbl_count.setStyleSheet(f"color:{MUTED};font-size:11px;")
         bot.addWidget(self.lbl_count)
         bot.addStretch()
-        hint = QLabel("더블클릭: 파라미터 편집")
+        hint = QLabel("더블클릭: 파라미터 편집  |  SF 등급: 수신전력 기준 자동 계산")
         hint.setStyleSheet(f"color:{MUTED};font-size:11px;")
         bot.addWidget(hint)
         lay.addLayout(bot)
@@ -170,23 +192,42 @@ class NodeListWindow(QDialog):
             r = self.tbl.rowCount()
             self.tbl.insertRow(r)
 
-            # 커버리지 결과에서 연결 GW / 수신전력 / 상태 추출
-            best_gw = "─"
-            best_pr = "─"
-            status  = "─"
+            best_gw      = "─"
+            best_pr      = "─"
+            sf_grade     = "─"
+            status       = "─"
             status_color = None
+            pr_color     = None
+            sf_color     = None
 
             if self._result and ni < len(self._result.nodes):
                 info = self._result.nodes[ni]
                 if info.best_gw:
                     best_gw = info.best_gw
                 if info.best_pr > -999:
-                    best_pr = f"{info.best_pr:.1f}"
+                    best_pr  = f"{info.best_pr:.1f}"
+                    sf_grade = _pr_to_sf(info.best_pr)
+                    # 수신전력 색상
+                    if info.best_pr >= -90:
+                        pr_color = '#FF4444'
+                    elif info.best_pr >= -100:
+                        pr_color = '#FF8C00'
+                    elif info.best_pr >= -110:
+                        pr_color = '#FFD700'
+                    elif info.best_pr >= -120:
+                        pr_color = '#00C94A'
+                    else:
+                        pr_color = '#4f8ef7'
+                    # SF 색상
+                    for sf in sorted(SF_SENS.keys()):
+                        if info.best_pr >= SF_SENS[sf]:
+                            sf_color = SF_COLORS[sf]
+                            break
                 if info.covered:
-                    status = "✓ 커버"
+                    status       = "✓ 커버"
                     status_color = "#00C94A"
                 else:
-                    status = "✗ 미커버"
+                    status       = "✗ 미커버"
                     status_color = "#FF4444"
 
             values = [
@@ -199,42 +240,34 @@ class NodeListWindow(QDialog):
                 f"{nd.min_rx_dbm:.1f}",
                 best_gw,
                 best_pr,
+                sf_grade,
                 status,
             ]
+
+            # COLS 인덱스 매핑
+            COL_PR     = 8
+            COL_SF     = 9
+            COL_STATUS = 10
 
             for c, v in enumerate(values):
                 it = QTableWidgetItem(str(v))
                 it.setTextAlignment(Qt.AlignCenter)
+                if c == COL_PR and pr_color:
+                    it.setForeground(QColor(pr_color))
+                if c == COL_SF and sf_color:
+                    it.setForeground(QColor(sf_color))
+                    it.setBackground(QColor(sf_color + '22'))
+                if c == COL_STATUS and status_color:
+                    it.setForeground(QColor(status_color))
+                    bg = '#0d2010' if status_color == '#00C94A' else '#200d0d'
+                    it.setBackground(QColor(bg))
                 self.tbl.setItem(r, c, it)
-
-            # 상태 컬럼 색상
-            if status_color:
-                from PyQt5.QtGui import QColor
-                self.tbl.item(r, 9).setForeground(QColor(status_color))
-                if info.covered:
-                    self.tbl.item(r, 9).setBackground(QColor("#0d2010"))
-                else:
-                    self.tbl.item(r, 9).setBackground(QColor("#200d0d"))
-
-            # 수신전력 색상
-            if self._result and ni < len(self._result.nodes):
-                info = self._result.nodes[ni]
-                if info.best_pr > -999:
-                    if info.best_pr >= -110:
-                        pr_col = "#00C94A"
-                    elif info.best_pr >= nd.min_rx_dbm:
-                        pr_col = "#FFD700"
-                    else:
-                        pr_col = "#FF4444"
-                    from PyQt5.QtGui import QColor
-                    self.tbl.item(r, 8).setForeground(QColor(pr_col))
 
         self.lbl_count.setText(f"Node: {len(self._nodes)}개")
         if not suppress_map:
             self.sig_map_refresh.emit()
 
     def update_result(self, result):
-        """커버리지 분석 결과 반영 — 테이블 갱신."""
         self._result = result
         self._refresh_table(suppress_map=True)
 
@@ -259,23 +292,21 @@ class NodeListWindow(QDialog):
 
     def _add_default(self):
         n = len(self._nodes) + 1
-        # 부모(MainWindow)에서 설정값 가져오기
         p = self.parent()
         s = getattr(p, '_settings', {})
         self._nodes.append(NodeEntry(
-            callsign   = f"Node{n}",
-            lon        = 127.10, lat=37.40,
-            gr_dbi     = s.get('nd_gr_dbi', 2.15),
-            lr_db      = s.get('nd_lr_db',  0.0),
-            hm_m       = s.get('nd_hm_m',   1.5),
-            min_rx_dbm = s.get('nd_min_rx', -126.6),
+            callsign       = f"Node{n}",
+            lon            = 127.10, lat=37.40,
+            gr_dbi         = s.get('nd_gr_dbi', 2.15),
+            lr_db          = s.get('nd_lr_db',  0.0),
+            hm_m           = s.get('nd_hm_m',   1.5),
+            min_rx_dbm     = s.get('nd_min_rx', -126.6),
             indoor_loss_db = s.get('nd_indoor_loss', 0.0),
         ))
         self._refresh_table()
 
     def _del_selected(self):
-        rows = sorted({i.row() for i in self.tbl.selectedItems()},
-                      reverse=True)
+        rows = sorted({i.row() for i in self.tbl.selectedItems()}, reverse=True)
         for r in rows:
             if r < len(self._nodes): self._nodes.pop(r)
         self._refresh_table()
@@ -292,39 +323,30 @@ class NodeListWindow(QDialog):
             self._refresh_table()
 
     def _open_detail(self):
-            from ui.node_gw_detail_window import NodeGWDetailWindow
-
-            rows = list({i.row() for i in self.tbl.selectedItems()})
-            if not rows:
-                QMessageBox.information(self, "알림",
-                    "Node를 먼저 선택하세요. (행 클릭)")
-                return
-            r = rows[0]
-            if r >= len(self._nodes):
-                return
-
-            nd      = self._nodes[r]
-            gw_win  = getattr(self.parent(), '_gw_win',  None)
-            result  = getattr(self.parent(), '_result',  None)
-            gws     = gw_win.get_gws() if gw_win else []
-
-            if not gws:
-                QMessageBox.information(self, "알림",
-                    "GW를 먼저 추가하세요.")
-                return
-
-            dlg = NodeGWDetailWindow(nd, gws, r, result, parent=self)
-            dlg.show()
+        from ui.node_gw_detail_window import NodeGWDetailWindow
+        rows = list({i.row() for i in self.tbl.selectedItems()})
+        if not rows:
+            QMessageBox.information(self, "알림", "Node를 먼저 선택하세요. (행 클릭)")
+            return
+        r = rows[0]
+        if r >= len(self._nodes):
+            return
+        nd     = self._nodes[r]
+        gw_win = getattr(self.parent(), '_gw_win',  None)
+        result = getattr(self.parent(), '_result',  None)
+        gws    = gw_win.get_gws() if gw_win else []
+        if not gws:
+            QMessageBox.information(self, "알림", "GW를 먼저 추가하세요.")
+            return
+        dlg = NodeGWDetailWindow(nd, gws, r, result, parent=self)
+        dlg.show()
 
     def _random_place(self):
-        """성남시 경계 내 랜덤 배치."""
         dlg = RandomPlaceDialog(self)
         if dlg.exec_() != QDialog.Accepted:
             return
-
         count, seed = dlg.get_params()
 
-        # 부모(MainWindow)에서 spatial 가져오기
         spatial = None
         p = self.parent()
         while p is not None:
@@ -332,23 +354,16 @@ class NodeListWindow(QDialog):
                 spatial = p.spatial
                 break
             p = p.parent() if hasattr(p, 'parent') else None
-        
+
         if spatial is None:
             QMessageBox.warning(self, "오류", "공간 데이터가 로드되지 않았습니다.")
             return
 
         try:
             from shapely.geometry import MultiPoint
-            b = list(spatial.bounds)
-            b[0] = float(b[0])
-            b[1] = float(b[1])
-            b[2] = float(b[2])
-            b[3] = float(b[3])
-            
-            # print(f"[DEBUG] bounds: {b}")
+            b = [float(x) for x in spatial.bounds]
             poly = spatial.polygon_4326
-            
-            s = getattr(self.parent(), '_settings', {})
+            s    = getattr(self.parent(), '_settings', {})
             np.random.seed(seed)
             lon_list, lat_list = [], []
 
@@ -364,17 +379,17 @@ class NodeListWindow(QDialog):
 
             lon_arr = np.array(lon_list[:count])
             lat_arr = np.array(lat_list[:count])
-
             start_n = len(self._nodes)
+
             for i in range(count):
                 self._nodes.append(NodeEntry(
-                    callsign  = f"Node{start_n + i + 1}",
-                    lon       = float(lon_arr[i]),
-                    lat       = float(lat_arr[i]),
-                    gr_dbi    = s.get('nd_gr_dbi', 2.15),
-                    lr_db     = s.get('nd_lr_db',  0.0),
-                    hm_m      = s.get('nd_hm_m',   1.5),
-                    min_rx_dbm= s.get('nd_min_rx', -126.6),
+                    callsign       = f"Node{start_n + i + 1}",
+                    lon            = float(lon_arr[i]),
+                    lat            = float(lat_arr[i]),
+                    gr_dbi         = s.get('nd_gr_dbi', 2.15),
+                    lr_db          = s.get('nd_lr_db',  0.0),
+                    hm_m           = s.get('nd_hm_m',   1.5),
+                    min_rx_dbm     = s.get('nd_min_rx', -126.6),
                     indoor_loss_db = s.get('nd_indoor_loss', 0.0),
                 ))
 
@@ -387,7 +402,6 @@ class NodeListWindow(QDialog):
             QMessageBox.critical(self, "오류", f"랜덤 배치 실패:\n{e}")
 
     def status_msg(self, msg):
-        """상태 메시지 (부모 창 상태바 사용)."""
         parent = self.parent()
         if parent and hasattr(parent, 'status'):
             parent.status.showMessage(msg)
@@ -409,13 +423,13 @@ class NodeListWindow(QDialog):
             for row in csv.DictReader(f):
                 try:
                     self._nodes.append(NodeEntry(
-                        callsign  = row.get('callsign', 'Node'),
-                        lon       = float(row.get('lon', row.get('longitude', 127.1))),
-                        lat       = float(row.get('lat', row.get('latitude', 37.4))),
-                        gr_dbi    = float(row.get('gr_dbi', 2.15)),
-                        lr_db     = float(row.get('lr_db', 0)),
-                        hm_m      = float(row.get('hm_m', 1.5)),
-                        min_rx_dbm= float(row.get('min_rx_dbm', -126.6)),
+                        callsign       = row.get('callsign', 'Node'),
+                        lon            = float(row.get('lon', row.get('longitude', 127.1))),
+                        lat            = float(row.get('lat', row.get('latitude', 37.4))),
+                        gr_dbi         = float(row.get('gr_dbi', 2.15)),
+                        lr_db          = float(row.get('lr_db', 0)),
+                        hm_m           = float(row.get('hm_m', 1.5)),
+                        min_rx_dbm     = float(row.get('min_rx_dbm', -126.6)),
                         indoor_loss_db = float(row.get('indoor_loss_db', 0.0)),
                     ))
                 except Exception: continue
@@ -427,22 +441,26 @@ class NodeListWindow(QDialog):
         if not path: return
         with open(path, 'w', newline='', encoding='utf-8-sig') as f:
             w = csv.writer(f)
-            w.writerow(['callsign', 'lon', 'lat', 'gr_dbi', 'lr_db',
-                        'hm_m', 'min_rx_dbm', 'indoor_loss_db',
-                        '연결 GW', '수신전력(dBm)', '상태'])
+            w.writerow([
+                'callsign', 'lon', 'lat', 'gr_dbi', 'lr_db',
+                'hm_m', 'min_rx_dbm', 'indoor_loss_db',
+                '연결 GW', '수신전력(dBm)', 'SF 등급', '상태'
+            ])
             for ni, n in enumerate(self._nodes):
-                best_gw = ""
-                best_pr = ""
-                status  = ""
+                best_gw  = ""
+                best_pr  = ""
+                sf_grade = ""
+                status   = ""
                 if self._result and ni < len(self._result.nodes):
-                    info    = self._result.nodes[ni]
-                    best_gw = info.best_gw or ""
-                    best_pr = f"{info.best_pr:.1f}" if info.best_pr > -999 else ""
-                    status  = "커버" if info.covered else "미커버"
+                    info     = self._result.nodes[ni]
+                    best_gw  = info.best_gw or ""
+                    best_pr  = f"{info.best_pr:.1f}" if info.best_pr > -999 else ""
+                    sf_grade = _pr_to_sf(info.best_pr) if info.best_pr > -999 else ""
+                    status   = "커버" if info.covered else "미커버"
                 w.writerow([
                     n.callsign, n.lon, n.lat,
                     n.gr_dbi, n.lr_db, n.hm_m,
                     n.min_rx_dbm,
                     getattr(n, 'indoor_loss_db', 0.0),
-                    best_gw, best_pr, status,
+                    best_gw, best_pr, sf_grade, status,
                 ])
