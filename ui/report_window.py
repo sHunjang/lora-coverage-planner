@@ -10,10 +10,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal
 from ui.dialogs import DARK, PANEL, TEXT, MUTED, BORDER, STYLE_DLG
 
-SF_SENS = {
-    7: -123.0, 8: -126.0, 9: -129.0,
-    10: -132.0, 11: -134.5, 12: -137.0,
-}
+from core.utils import SF_SENS
+
 
 
 def _pr_to_sf(pr: float) -> str:

@@ -8,6 +8,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
+from core.utils import SF_SENS
+
 DARK   = "#181b22"
 PANEL  = "#1e2130"
 TEXT   = "#e0e4ef"
@@ -20,10 +22,7 @@ BLUE   = "#4f8ef7"
 PURPLE = "#9B59B6"
 ORANGE = "#FF8C00"
 
-SF_SENS = {
-    7:-123.0, 8:-126.0, 9:-129.0,
-    10:-132.0, 11:-134.5, 12:-137.0,
-}
+
 SF_COLORS_ADR = {
     7:'#FF4444', 8:'#FF8C00', 9:'#FFD700',
     10:'#00C94A', 11:'#4f8ef7', 12:'#9B59B6',

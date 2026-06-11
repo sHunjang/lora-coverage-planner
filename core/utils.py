@@ -2,6 +2,12 @@
 from __future__ import annotations
 import numpy as np
 
+# SF별 최소 수신 감도 (dBm) — LoRa 125kHz 기준
+SF_SENS = {
+    7: -123.0, 8: -126.0, 9: -129.0,
+    10: -132.0, 11: -134.5, 12: -137.0,
+}
+
 
 def haversine(lon1: float, lat1: float,
               lon2: float, lat2: float) -> float:
@@ -29,10 +35,6 @@ def pr_to_sf(pr_dbm: float) -> int:
     수신전력(dBm)으로 최적 ADR SF 결정.
     낮은 SF = 빠른 전송 (SF7이 가장 빠름).
     """
-    SF_SENS = {
-        7: -123.0, 8: -126.0, 9: -129.0,
-        10: -132.0, 11: -134.5, 12: -137.0,
-    }
     for sf in sorted(SF_SENS.keys()):
         if pr_dbm >= SF_SENS[sf]:
             return sf

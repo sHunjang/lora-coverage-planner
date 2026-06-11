@@ -41,20 +41,20 @@ class SpatialData:
         self.dem_path = dem_path
 
         # SHP 관련
-        self.gdf_3857     = None   # GeoDataFrame (EPSG:3857)
-        self.gdf_4326     = None   # GeoDataFrame (EPSG:4326)
-        self.polygon_3857 = None   # 성남시 경계 폴리곤 (3857)
-        self.polygon_4326 = None   # 성남시 경계 폴리곤 (4326)
-        self.bounds       = None   # [lon_min, lat_min, lon_max, lat_max]
+        self.gdf_3857     = None
+        self.gdf_4326     = None
+        self.polygon_3857 = None
+        self.polygon_4326 = None
+        self.bounds       = None
 
         # DEM 관련
-        self.dem          = None   # 2D float32 배열 (마스킹 완료)
-        self.dem_transform = None  # rasterio Affine transform
-        self.dem_rows     = 0
-        self.dem_cols     = 0
-        self.res          = 10.0  # 픽셀 해상도 (m)
-        self.ox           = 0.0   # DEM 원점 X (EPSG:3857)
-        self.oy           = 0.0   # DEM 원점 Y (EPSG:3857)
+        self.dem           = None
+        self.dem_transform = None
+        self.dem_rows      = 0
+        self.dem_cols      = 0
+        self.res           = 10.0
+        self.ox            = 0.0
+        self.oy            = 0.0
 
         # 좌표 변환기
         self._to_3857 = Transformer.from_crs(
@@ -64,22 +64,13 @@ class SpatialData:
 
     # ── 데이터 로드 ──────────────────────────────────────────
     def load(self, progress_cb=None):
-        """
-        SHP + DEM 파일 로드.
-
-        Parameters
-        ----------
-        progress_cb : 진행 메시지를 받을 콜백 함수 (str → None)
-        """
         def _log(msg: str):
             if progress_cb:
                 progress_cb(msg)
             else:
                 print(msg)
 
-        # ── SHP 로드 ─────────────────────────────────────────
         _log("SHP 로드 중...")
-        # pyogrio를 우선 엔진으로 사용 (PyInstaller 번들 환경 호환성)
         try:
             self.gdf_3857 = gpd.read_file(self.shp_path, engine='pyogrio')
         except Exception:
@@ -87,10 +78,9 @@ class SpatialData:
         self.polygon_3857 = self.gdf_3857.geometry.iloc[0]
         self.gdf_4326     = self.gdf_3857.to_crs(epsg=4326)
         self.polygon_4326 = self.gdf_4326.geometry.iloc[0]
-        self.bounds       = self.gdf_4326.total_bounds  # [xmin,ymin,xmax,ymax]
+        self.bounds       = self.gdf_4326.total_bounds
         _log(f"  경계 로드 완료: {self.polygon_4326.bounds}")
 
-        # ── DEM 로드 + 마스킹 ────────────────────────────────
         _log("DEM 로드 및 마스킹 중...")
         with rasterio.open(self.dem_path) as src:
             out_image, self.dem_transform = rio_mask(
@@ -101,15 +91,14 @@ class SpatialData:
             )
             raw = out_image[0].astype(np.float32)
 
-        # NoData(-9999) 및 음수 고도 처리
         raw[raw <= -9998] = np.nan
         raw[raw < 0]      = np.nan
         self.dem = raw
 
         self.dem_rows, self.dem_cols = self.dem.shape
-        self.res = self.dem_transform.a          # x방향 해상도 (m)
-        self.ox  = self.dem_transform.c          # 좌상단 X
-        self.oy  = self.dem_transform.f          # 좌상단 Y
+        self.res = self.dem_transform.a
+        self.ox  = self.dem_transform.c
+        self.oy  = self.dem_transform.f
 
         valid_px = int(np.sum(~np.isnan(self.dem)))
         _log(f"  DEM 로드 완료: {self.dem_rows}×{self.dem_cols}px "
@@ -119,10 +108,6 @@ class SpatialData:
 
     # ── 고도 조회 (단일 포인트) ──────────────────────────────
     def get_elevation(self, x3857: float, y3857: float) -> float:
-        """
-        EPSG:3857 좌표의 DEM 고도 반환.
-        NaN 픽셀이면 50.0m 폴백.
-        """
         col = int(np.clip((x3857 - self.ox) / self.res, 0, self.dem_cols - 1))
         row = int(np.clip((self.oy - y3857) / self.res, 0, self.dem_rows - 1))
         val = self.dem[row, col]
@@ -132,17 +117,6 @@ class SpatialData:
     def get_elevation_batch(self,
                             x3857: np.ndarray,
                             y3857: np.ndarray) -> np.ndarray:
-        """
-        EPSG:3857 좌표 배열의 DEM 고도를 한 번에 반환 (numpy 벡터화).
-
-        Parameters
-        ----------
-        x3857, y3857 : ndarray (N,) — 3857 좌표 배열
-
-        Returns
-        -------
-        ndarray (N,) — 고도값 (NaN → 50.0m)
-        """
         cols = np.clip(
             ((x3857 - self.ox) / self.res).astype(int),
             0, self.dem_cols - 1)
@@ -156,18 +130,6 @@ class SpatialData:
     def check_los(self,
                   x1: float, y1: float, h1: float,
                   x2: float, y2: float, h2: float) -> bool:
-        """
-        두 점 사이의 LOS(Line of Sight) 여부 판별.
-
-        지형 단면을 따라 시선이 지형보다 높으면 LOS=True.
-
-        Parameters
-        ----------
-        x1,y1 : 송신점 3857 좌표
-        h1    : 송신 안테나 지상 높이 (m)
-        x2,y2 : 수신점 3857 좌표
-        h2    : 수신 안테나 지상 높이 (m)
-        """
         c1 = int(np.clip((x1 - self.ox) / self.res, 0, self.dem_cols - 1))
         r1 = int(np.clip((self.oy - y1) / self.res, 0, self.dem_rows - 1))
         c2 = int(np.clip((x2 - self.ox) / self.res, 0, self.dem_cols - 1))
@@ -185,41 +147,64 @@ class SpatialData:
 
     # ── 좌표 변환 헬퍼 ───────────────────────────────────────
     def lonlat_to_xy(self, lon, lat):
-        """위경도(4326) → 3857 변환. 배열 입력 지원."""
         return self._to_3857.transform(lon, lat)
 
     def xy_to_lonlat(self, x, y):
-        """3857 → 위경도(4326) 변환. 배열 입력 지원."""
         return self._to_4326.transform(x, y)
-    
+
+    # ── 환경 자동 분류 (클러터) ──────────────────────────────
     def get_env_code(self, x3857: float, y3857: float,
-                    radius_px: int = 20) -> int:
+                     radius_px: int = 10) -> int:
         """
         DSM 기반 주변 환경 자동 분류.
-        반경 radius_px 픽셀(기본 200m) 내 고도 통계로 env 코드 결정.
+        반경 radius_px 픽셀(기본 100m) 내 고도 통계로 env 코드 결정.
+
+        [분류 로직]
+        1. 산지 판별 먼저 수행
+           - 지형 기준선(하위 10%) 자체가 높고(>60m) 경사(std)가 크면 → Open
+           - 산지는 DSM 자체가 높아 build_h/std가 커서 Dense Urban으로
+             오분류되는 문제를 방지
+        2. 건물 돌출 높이(build_h)와 표준편차(std)로 도시 밀도 분류
+           - Dense Urban : 고층 건물 밀집 (아파트 단지 등)
+           - Urban       : 일반 도심 (상업/업무 지역)
+           - Suburban    : 저층 주거지역
+           - Open        : 도로 / 공원 / 하천 / 개활지 / 산지
 
         Returns: 1=Dense Urban, 2=Urban, 3=Suburban, 4=Open
         """
         col = int(np.clip((x3857 - self.ox) / self.res,
-                        radius_px, self.dem_cols - radius_px - 1))
+                          radius_px, self.dem_cols - radius_px - 1))
         row = int(np.clip((self.oy - y3857) / self.res,
-                        radius_px, self.dem_rows - radius_px - 1))
+                          radius_px, self.dem_rows - radius_px - 1))
 
-        patch = self.dem[row-radius_px:row+radius_px,
-                        col-radius_px:col+radius_px]
+        patch = self.dem[row - radius_px : row + radius_px,
+                         col - radius_px : col + radius_px]
         valid = patch[~np.isnan(patch)]
         if len(valid) == 0:
             return 2  # 기본 Urban
 
         mean_h  = float(np.mean(valid))
         std_h   = float(np.std(valid))
-        # 지형 기준선 추정: 하위 10% 평균
+        # 지형 기준선: 하위 10% 평균 (건물이 없는 지면 고도 추정)
         terrain = float(np.percentile(valid, 10))
-        # 건물 높이 = DSM - 지형 기준선
+        # 건물/구조물 돌출 높이 = 평균 DSM - 지형 기준선
         build_h = mean_h - terrain
 
-        # 분류 기준 (성남시 DSM 기반 경험값)
-        if   build_h >= 20 and std_h >= 15: return 1  # Dense Urban
-        elif build_h >= 10 and std_h >= 8:  return 2  # Urban
-        elif build_h >= 3  and std_h >= 3:  return 3  # Suburban
-        else:                                return 4  # Open
+        # ── 1단계: 산지/자연 지형 판별 ───────────────────────
+        # 성남시 기준: 평지 고도 30~50m, 산지 60m 이상
+        # 산지 특징: terrain 자체가 높고 경사(std)가 크다
+        # 건물 특징: terrain은 낮고(평지) build_h와 std가 크다
+        is_mountain = (terrain > 60.0 and std_h > 8.0)
+        if is_mountain:
+            return 4  # Open — 산지/공원/자연 지형
+
+        # ── 2단계: 건물 밀도 분류 ─────────────────────────────
+        # terrain < 60 조건으로 산지 오분류 추가 방어
+        if   build_h >= 18 and std_h >= 12 and terrain < 60:
+            return 1  # Dense Urban (고층 아파트/빌딩 밀집)
+        elif build_h >= 8  and std_h >= 5  and terrain < 80:
+            return 2  # Urban (일반 도심/상업지역)
+        elif build_h >= 3  and std_h >= 2:
+            return 3  # Suburban (저층 주거지역)
+        else:
+            return 4  # Open (도로/공원/하천/개활지)

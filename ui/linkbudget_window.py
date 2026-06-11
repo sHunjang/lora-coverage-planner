@@ -11,18 +11,9 @@ from PyQt5.QtGui import QColor
 
 from ui.dialogs import DARK, PANEL, TEXT, MUTED, BORDER, STYLE_DLG
 from core.coverage import GWEntry, NodeEntry
+from core.utils import SF_SENS
 
 STYLE = STYLE_DLG
-
-# SF별 최소 수신 감도 (dBm) — LoRa 125kHz 기준
-SF_SENS = {
-    7:  -123.0,
-    8:  -126.0,
-    9:  -129.0,
-    10: -132.0,
-    11: -134.5,
-    12: -137.0,
-}
 
 
 def calc_link_budget(gw: GWEntry, nd: NodeEntry,

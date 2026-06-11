@@ -38,6 +38,12 @@ DEFAULT_SETTINGS = {
     "bandwidth_khz" : 125.0,  # LoRa 대역폭 (kHz)
     
     "tx_interval_s" : 300.0,   # Node 패킷 전송 주기 (초, 기본 5분)
+    
+    "large_node_mode"    : "auto",   # auto / always / off
+    "large_node_threshold": 1000,    # 대용량 모드 전환 기준 Node 수
+    "large_sample_ratio" : 0.3,      # 샘플링 비율 (0.1~1.0)
+    
+    "radius_km"     : 25.0,
 }
 
 # LoRa SF별 SNR 임계값 (dB)
@@ -212,6 +218,35 @@ class SettingsWindow(QDialog):
         fl3.addRow("최소 수신 레벨",        self.sp_nd_rxm)
         fl3.addRow("실내 투과 손실 (기본)", self.sp_nd_indoor)
         fl3.addRow("패킷 전송 주기", self.sp_tx_interval)
+        
+        # ── 대용량 Node 모드 ──────────────────────────────────
+        lrg_grp = QGroupBox("대용량 Node 모드")
+        lrg_grp.setStyleSheet(
+            f"QGroupBox{{color:{MUTED};border:1px solid {BORDER};"
+            f"border-radius:6px;margin-top:6px;padding-top:8px;}}"
+            f"QGroupBox::title{{subcontrol-origin:margin;left:8px;}}")
+        lrg_lay = QFormLayout(lrg_grp); lrg_lay.setSpacing(8)
+
+        self.cb_large_mode = QComboBox()
+        self.cb_large_mode.addItem("Auto (Node 수 초과 시 자동)", "auto")
+        self.cb_large_mode.addItem("항상 사용",                   "always")
+        self.cb_large_mode.addItem("사용 안함 (항상 정밀)",       "off")
+
+        self.sp_large_threshold = _ispin(100, 10000, 1000)
+        self.sp_sample_ratio    = _dspin(0.1, 1.0, 0.3, 1, "", 0.1)
+
+        lrg_lay.addRow("모드 설정",    self.cb_large_mode)
+        lrg_lay.addRow("전환 기준 Node 수", self.sp_large_threshold)
+        lrg_lay.addRow("샘플링 비율",  self.sp_sample_ratio)
+
+        note_lrg = QLabel(
+            "· Auto: Node 수가 기준 초과 시 자동 전환\n"
+            "· 샘플링 비율 0.3 = 30% 정밀 계산 후 보간\n"
+            "· 정확도 소폭 감소 대신 속도 3~5배 향상\n"
+            "· 1000개 초과 시 권장")
+        note_lrg.setStyleSheet(f"color:{MUTED};font-size:10px;")
+        lrg_lay.addRow("", note_lrg)
+        fl3.addRow(lrg_grp)
 
         note3 = QLabel(
             "· 실내 투과 손실: 실외=0dB, 목조=5~10dB\n"
@@ -345,10 +380,22 @@ class SettingsWindow(QDialog):
 
         self.sp_tx_interval.setValue(s.get("tx_interval_s", 300.0))
         
+        self.sp_radius.setValue(s.get("radius_km", 25.0))
+        
         tile = s.get("map_tile", "CartoDB Voyager")
         idx  = self.cb_tile.findText(tile)
         if idx >= 0:
             self.cb_tile.setCurrentIndex(idx)
+
+        # 대용량 모드
+        lm = s.get("large_node_mode", "auto")
+        for i in range(self.cb_large_mode.count()):
+            if self.cb_large_mode.itemData(i) == lm:
+                self.cb_large_mode.setCurrentIndex(i); break
+        self.sp_large_threshold.setValue(
+            s.get("large_node_threshold", 1000))
+        self.sp_sample_ratio.setValue(
+            s.get("large_sample_ratio", 0.3))
 
         # SNR 탭
         self.sp_snr_margin.setValue(s.get("snr_margin_db",  10.0))
@@ -380,6 +427,12 @@ class SettingsWindow(QDialog):
             "bandwidth_khz" : self.sp_bandwidth.value(),
             
             "tx_interval_s" : self.sp_tx_interval.value(),
+            
+            "large_node_mode"    : self.cb_large_mode.currentData(),
+            "large_node_threshold": self.sp_large_threshold.value(),
+            "large_sample_ratio" : self.sp_sample_ratio.value(),
+            
+            "radius_km"     : self.sp_radius.value(),
         }
 
     def _apply(self):

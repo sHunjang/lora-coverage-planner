@@ -69,33 +69,27 @@ class Snapshot:
 
     def summary(self) -> dict:
         """비교에 사용할 주요 지표 딕셔너리."""
-        r = self.result
+        r     = self.result
         nodes = r.nodes
 
         n_total   = r.n_total
         n_covered = r.n_covered
         n_gws     = len(self.gws)
 
-        # 중첩도
         n_multi  = sum(1 for nd in nodes if nd.n_rx_gw >= 2)
         n_single = sum(1 for nd in nodes if nd.covered and nd.n_rx_gw == 1)
         n_uncov  = sum(1 for nd in nodes if not nd.covered)
         overlap_pct = n_multi / n_covered * 100 if n_covered > 0 else 0
         single_pct  = n_single / n_total * 100  if n_total  > 0 else 0
 
-        # SNR
-        avg_snr    = getattr(r, 'avg_snr', 0.0)
-        avg_margin = getattr(r, 'avg_snr_margin', 0.0)
+        avg_snr    = getattr(r, 'avg_snr',           0.0)
+        avg_margin = getattr(r, 'avg_snr_margin',    0.0)
         cell_rate  = getattr(r, 'cell_success_rate', 0.0)
         edge_rate  = getattr(r, 'edge_success_rate', 0.0)
-
-        # 매크로 다이버시티
         macro_gain = getattr(r, 'macro_diversity_gain', 0.0)
-        avg_rx_gw  = getattr(r, 'avg_n_rx_gw', 0.0)
-
-        # ADR
-        adr_dist  = getattr(r, 'adr_sf_distribution', {})
-        avg_toa   = getattr(r, 'avg_toa_ms', 0.0)
+        avg_rx_gw  = getattr(r, 'avg_n_rx_gw',       0.0)
+        adr_dist   = getattr(r, 'adr_sf_distribution', {})
+        avg_toa    = getattr(r, 'avg_toa_ms',         0.0)
         avg_nodes_per_gw = n_covered / n_gws if n_gws > 0 else 0
 
         return {
@@ -118,6 +112,163 @@ class Snapshot:
             'sf7_pct'  : adr_dist.get(7,  0) / n_covered * 100 if n_covered else 0,
             'sf12_pct' : adr_dist.get(12, 0) / n_covered * 100 if n_covered else 0,
         }
+
+    # ── 직렬화 ────────────────────────────────────────────
+    def to_dict(self) -> dict:
+        """JSON 저장용 딕셔너리 변환."""
+        from core.coverage import GWEntry, NodeEntry
+        r = self.result
+
+        def _link(nd):
+            return {
+                'covered'    : bool(nd.covered),
+                'best_gw'    : str(nd.best_gw),
+                'best_pr'    : float(nd.best_pr),
+                'gw_prs'     : {k: float(v) for k, v in nd.gw_prs.items()},
+                'macro_pr'   : float(getattr(nd, 'macro_pr',    -999.0)),
+                'n_rx_gw'    : int  (getattr(nd, 'n_rx_gw',     0)),
+                'best_snr'   : float(getattr(nd, 'best_snr',    -999.0)),
+                'snr_margin' : float(getattr(nd, 'snr_margin',  -999.0)),
+                'link_ok'    : bool (getattr(nd, 'link_ok',     False)),
+                'adr_sf'     : int  (getattr(nd, 'adr_sf',      12)),
+                'toa_ms'     : float(getattr(nd, 'toa_ms',      0.0)),
+            }
+
+        return {
+            'label'    : self.label,
+            'timestamp': self.timestamp.isoformat(),
+            'gws': [
+                {
+                    'callsign': g.callsign,
+                    'lon'     : float(g.lon),
+                    'lat'     : float(g.lat),
+                    'pt_dbm'  : float(g.pt_dbm),
+                    'gt_dbi'  : float(g.gt_dbi),
+                    'lt_db'   : float(g.lt_db),
+                    'hb_m'    : float(g.hb_m),
+                    'enabled' : bool(g.enabled),
+                }
+                for g in self.gws
+            ],
+            'nodes': [
+                {
+                    'callsign'      : n.callsign,
+                    'lon'           : float(n.lon),
+                    'lat'           : float(n.lat),
+                    'gr_dbi'        : float(n.gr_dbi),
+                    'lr_db'         : float(n.lr_db),
+                    'hm_m'          : float(n.hm_m),
+                    'min_rx_dbm'    : float(n.min_rx_dbm),
+                    'indoor_loss_db': float(getattr(n, 'indoor_loss_db', 0.0)),
+                }
+                for n in self.nodes
+            ],
+            'result': {
+                'n_covered'           : int  (r.n_covered),
+                'n_total'             : int  (r.n_total),
+                'gw_counts'           : {k: int(v) for k, v in r.gw_counts.items()},
+                'macro_diversity_gain': float(getattr(r, 'macro_diversity_gain', 0.0)),
+                'avg_n_rx_gw'         : float(getattr(r, 'avg_n_rx_gw',          0.0)),
+                'adr_sf_distribution' : {str(k): int(v)
+                                         for k, v in getattr(
+                                             r, 'adr_sf_distribution', {}).items()},
+                'avg_toa_ms'          : float(getattr(r, 'avg_toa_ms',           0.0)),
+                'cell_success_rate'   : float(getattr(r, 'cell_success_rate',    0.0)),
+                'edge_success_rate'   : float(getattr(r, 'edge_success_rate',    0.0)),
+                'avg_snr'             : float(getattr(r, 'avg_snr',              0.0)),
+                'avg_snr_margin'      : float(getattr(r, 'avg_snr_margin',       0.0)),
+                'gw_traffic'          : getattr(r, 'gw_traffic',                 {}),
+                'avg_pdr'             : float(getattr(r, 'avg_pdr',              100.0)),
+                'n_overloaded_gw'     : int  (getattr(r, 'n_overloaded_gw',      0)),
+                'avg_load_pct'        : float(getattr(r, 'avg_load_pct',         0.0)),
+                'nodes'               : [_link(nd) for nd in r.nodes],
+            },
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> 'Snapshot':
+        """JSON 딕셔너리에서 Snapshot 복원."""
+        from core.coverage import (
+            GWEntry, NodeEntry, CoverageResult, LinkResult)
+
+        # GW 복원
+        gws = [
+            GWEntry(
+                callsign = g['callsign'],
+                lon      = float(g['lon']),
+                lat      = float(g['lat']),
+                pt_dbm   = float(g['pt_dbm']),
+                gt_dbi   = float(g['gt_dbi']),
+                lt_db    = float(g['lt_db']),
+                hb_m     = float(g['hb_m']),
+                enabled  = bool(g.get('enabled', True)),
+            )
+            for g in d.get('gws', [])
+        ]
+
+        # Node 복원
+        nodes = [
+            NodeEntry(
+                callsign       = n['callsign'],
+                lon            = float(n['lon']),
+                lat            = float(n['lat']),
+                gr_dbi         = float(n['gr_dbi']),
+                lr_db          = float(n['lr_db']),
+                hm_m           = float(n['hm_m']),
+                min_rx_dbm     = float(n['min_rx_dbm']),
+                indoor_loss_db = float(n.get('indoor_loss_db', 0.0)),
+            )
+            for n in d.get('nodes', [])
+        ]
+
+        # CoverageResult 복원
+        rd = d.get('result', {})
+        result = CoverageResult(
+            n_covered            = rd.get('n_covered', 0),
+            n_total              = rd.get('n_total',   0),
+            gw_counts            = rd.get('gw_counts', {}),
+            macro_diversity_gain = float(rd.get('macro_diversity_gain', 0.0)),
+            avg_n_rx_gw          = float(rd.get('avg_n_rx_gw',          0.0)),
+            adr_sf_distribution  = {int(k): v for k, v in
+                                    rd.get('adr_sf_distribution', {}).items()},
+            avg_toa_ms           = float(rd.get('avg_toa_ms',           0.0)),
+            cell_success_rate    = float(rd.get('cell_success_rate',    0.0)),
+            edge_success_rate    = float(rd.get('edge_success_rate',    0.0)),
+            avg_snr              = float(rd.get('avg_snr',              0.0)),
+            avg_snr_margin       = float(rd.get('avg_snr_margin',       0.0)),
+            gw_traffic           = rd.get('gw_traffic',                 {}),
+            avg_pdr              = float(rd.get('avg_pdr',              100.0)),
+            n_overloaded_gw      = int  (rd.get('n_overloaded_gw',      0)),
+            avg_load_pct         = float(rd.get('avg_load_pct',         0.0)),
+        )
+
+        # LinkResult 복원
+        for nd in rd.get('nodes', []):
+            result.nodes.append(LinkResult(
+                covered    = bool (nd.get('covered',    False)),
+                best_gw    = str  (nd.get('best_gw',    '')),
+                best_pr    = float(nd.get('best_pr',    -999.0)),
+                gw_prs     = {k: float(v)
+                              for k, v in nd.get('gw_prs', {}).items()},
+                macro_pr   = float(nd.get('macro_pr',   -999.0)),
+                n_rx_gw    = int  (nd.get('n_rx_gw',    0)),
+                best_snr   = float(nd.get('best_snr',   -999.0)),
+                snr_margin = float(nd.get('snr_margin', -999.0)),
+                link_ok    = bool (nd.get('link_ok',    False)),
+                adr_sf     = int  (nd.get('adr_sf',     12)),
+                toa_ms     = float(nd.get('toa_ms',     0.0)),
+            ))
+
+        # Snapshot 생성 후 timestamp 복원
+        snap = cls.__new__(cls)
+        snap.label     = d.get('label', '복원된 결과')
+        snap.result    = result
+        snap.gws       = gws
+        snap.nodes     = nodes
+        snap.timestamp = datetime.fromisoformat(
+            d.get('timestamp', datetime.now().isoformat()))
+        snap.ts_str    = snap.timestamp.strftime("%H:%M:%S")
+        return snap
 
 
 # ── 비교 지표 정의 ────────────────────────────────────────

@@ -11,13 +11,10 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor
 from core.coverage import NodeEntry
+from core.utils import SF_SENS
 from ui.dialogs import NodeParamDialog, DARK, PANEL, TEXT, MUTED, BORDER, STYLE_DLG
 
-# SF 감도 기준
-SF_SENS = {
-    7: -123.0, 8: -126.0, 9: -129.0,
-    10: -132.0, 11: -134.5, 12: -137.0,
-}
+
 SF_COLORS = {
     7: '#FF4444', 8: '#FF8C00', 9: '#FFD700',
     10: '#00C94A', 11: '#4f8ef7', 12: '#9B59B6',

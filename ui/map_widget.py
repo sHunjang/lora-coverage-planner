@@ -8,7 +8,7 @@
 # - 거리 측정선
 # - 클릭 / 드래그 이벤트 브릿지
 
-import folium, tempfile
+import folium, tempfile, math
 import numpy as np
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
 from PyQt5.QtWebEngineWidgets import QWebEngineView
@@ -96,7 +96,7 @@ class MapWidget(QWidget):
 
     def refresh(self, gws=None, nodes=None, result=None,
                 heatmaps=None, selected_gws=None, map_tile=None,
-                measure_pts=None):
+                measure_pts=None, field_data=None):
         """
         지도를 새로 렌더링합니다.
 
@@ -125,7 +125,6 @@ class MapWidget(QWidget):
 
         # ── 거리 측정선 ──────────────────────────────────────
         if measure_pts and len(measure_pts) >= 1:
-            import math
 
             def _haversine(p1, p2):
                 R = 6371.0
@@ -384,6 +383,130 @@ class MapWidget(QWidget):
                     draggable=True,
                 ).add_to(gw_lyr)
             gw_lyr.add_to(m)
+
+        # ── 실측 데이터 오버레이 ─────────────────────────────
+        # field_data: [{'lat': float, 'lon': float,
+        #               'rssi': float, 'snr': float or None}, ...]
+        if field_data:
+            fd_lyr = folium.FeatureGroup(
+                name="📡 실측 데이터", show=True)
+
+            for pt in field_data:
+                lat  = pt.get('lat',  0.0)
+                lon  = pt.get('lon',  0.0)
+                rssi = pt.get('rssi', -999.0)
+                snr  = pt.get('snr',  None)
+
+                # 실측 색상: 시뮬레이션과 동일 기준
+                color = _pr_to_color(rssi)
+
+                # 툴팁
+                tip_parts = [f"실측 RSSI: {rssi:.1f} dBm"]
+                if snr is not None:
+                    tip_parts.append(f"SNR: {snr:.1f} dB")
+                tip = " | ".join(tip_parts)
+
+                # 실측 마커 — 다이아몬드 모양(rotate 45°) 으로
+                # 시뮬레이션 CircleMarker와 구분
+                folium.CircleMarker(
+                    location=[lat, lon],
+                    radius=8,
+                    color='white',        # 흰색 테두리로 구분
+                    weight=2,
+                    fill=True,
+                    fill_color=color,
+                    fill_opacity=0.85,
+                    tooltip=tip,
+                ).add_to(fd_lyr)
+
+            fd_lyr.add_to(m)
+
+            # ── 시뮬레이션 vs 실측 오차 레이어 ─────────────────
+            # 커버리지 결과가 있을 때 Node와 가장 가까운 실측점 매칭
+            if result and nodes and len(field_data) > 0:
+                err_lyr = folium.FeatureGroup(
+                    name="📊 시뮬-실측 오차", show=False)
+
+                for pt in field_data:
+                    fd_lat  = pt.get('lat',  0.0)
+                    fd_lon  = pt.get('lon',  0.0)
+                    fd_rssi = pt.get('rssi', -999.0)
+
+                    # 가장 가까운 Node 찾기
+                    best_ni   = -1
+                    best_dist = float('inf')
+                    for ni, nd in enumerate(nodes):
+                        import math
+                        dlat = nd.lat - fd_lat
+                        dlon = nd.lon - fd_lon
+                        d    = math.sqrt(dlat**2 + dlon**2)
+                        if d < best_dist:
+                            best_dist = d
+                            best_ni   = ni
+
+                    # 50m(~0.00045°) 이내 Node만 매칭
+                    if best_ni < 0 or best_dist > 0.00045:
+                        continue
+                    if best_ni >= len(result.nodes):
+                        continue
+
+                    sim_pr = result.nodes[best_ni].best_pr
+                    if sim_pr <= -999:
+                        continue
+
+                    err = sim_pr - fd_rssi   # 양수: 시뮬 과대 예측
+
+                    # 오차 크기에 따른 색상
+                    if abs(err) <= 3:
+                        err_color = '#00C94A'   # 녹색: 오차 ≤ 3dB
+                    elif abs(err) <= 8:
+                        err_color = '#FFD700'   # 노랑: 오차 ≤ 8dB
+                    else:
+                        err_color = '#FF4444'   # 빨강: 오차 > 8dB
+
+                    sign = '+' if err > 0 else ''
+                    nd   = nodes[best_ni]
+                    tip  = (f"{nd.callsign} | "
+                            f"시뮬: {sim_pr:.1f}dBm | "
+                            f"실측: {fd_rssi:.1f}dBm | "
+                            f"오차: {sign}{err:.1f}dB")
+
+                    # 오차선: Node → 실측점
+                    folium.PolyLine(
+                        locations=[[nd.lat, nd.lon],
+                                   [fd_lat, fd_lon]],
+                        color=err_color,
+                        weight=2.0,
+                        opacity=0.7,
+                        tooltip=tip,
+                        dash_array='4 3',
+                    ).add_to(err_lyr)
+
+                    # 오차 라벨
+                    mid_lat = (nd.lat + fd_lat) / 2
+                    mid_lon = (nd.lon + fd_lon) / 2
+                    folium.Marker(
+                        location=[mid_lat, mid_lon],
+                        icon=folium.DivIcon(
+                            html=(
+                                f'<div style="'
+                                f'background:{err_color}22;'
+                                f'border:1px solid {err_color};'
+                                f'border-radius:3px;'
+                                f'padding:1px 4px;'
+                                f'font-size:9px;'
+                                f'font-weight:bold;'
+                                f'color:{err_color};'
+                                f'white-space:nowrap;'
+                                f'pointer-events:none;">'
+                                f'{sign}{err:.1f}dB</div>'
+                            ),
+                            icon_size=(60, 16),
+                            icon_anchor=(30, 8),
+                        ),
+                    ).add_to(err_lyr)
+
+                err_lyr.add_to(m)
 
         folium.LayerControl(collapsed=False).add_to(m)
 

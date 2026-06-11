@@ -5,6 +5,7 @@ import numpy as np
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 
+from core.utils import SF_SENS
 
 @dataclass
 class GWEntry:
@@ -80,7 +81,7 @@ class CoverageResult:
 
 
 # 히트맵 격자 간격 최솟값
-STEP_MIN_HM = 0.0005
+STEP_MIN_HM = 0.0
 
 # LoRa SF별 SNR 임계값 (dB) — 표준 스펙
 SF_SNR_THRESH = {
@@ -102,6 +103,14 @@ class CoverageEngine:
         self.fc        = fc
         self.n_samples = n_samples
         self.settings  = settings or {}
+
+        # 대용량 모드 파라미터
+        self.LARGE_NODE_THRESHOLD = int(
+            self.settings.get('large_node_threshold', 1000))
+        self.SAMPLE_RATIO = float(
+            self.settings.get('large_sample_ratio', 0.3))
+        self.SAMPLE_MIN   = max(
+            100, int(self.LARGE_NODE_THRESHOLD * 0.1))
 
     def _model(self, hb, hm):
         from core.propagation import PathLossModel
@@ -144,6 +153,158 @@ class CoverageEngine:
 
         return round(snr_db, 2), round(snr_margin, 2)
 
+    # CoverageEngine 클래스 내부에 추가
+
+    # ── 대용량 모드 임계값 ────────────────────────────────────
+    LARGE_NODE_THRESHOLD = 1000   # 이 수 초과 시 샘플링 모드 자동 전환
+    SAMPLE_RATIO         = 0.3    # 샘플링 비율 (30%)
+    SAMPLE_MIN           = 300    # 최소 샘플 수
+
+    def _run_sampled(self, gws, nodes, cb=None):
+        """
+        대용량 Node 모드: 일부 Node만 정밀 계산 후
+        나머지는 최근접 샘플 결과로 보간합니다.
+
+        전략:
+        1. 균등 분포 샘플링으로 대표 Node 선택
+        2. 선택된 Node에 대해 정밀 run() 실행
+        3. 나머지 Node는 가장 가까운 샘플 Node의 결과를 거리 보정하여 적용
+
+        Args:
+            gws  : GW 목록
+            nodes: 전체 Node 목록
+            cb   : 진행률 콜백
+        Returns:
+            CoverageResult (n_total = len(nodes))
+        """
+        def _log(m):
+            if cb: cb(m)
+
+        n_total   = len(nodes)
+        n_sample  = max(
+            self.SAMPLE_MIN,
+            int(n_total * self.SAMPLE_RATIO))
+        n_sample  = min(n_sample, n_total)
+
+        _log(f"[대용량 모드] Node {n_total}개 → "
+            f"샘플 {n_sample}개 정밀 계산 후 보간")
+
+        # ── 균등 샘플링 ──────────────────────────────────────
+        # 전체 Node를 공간적으로 균등하게 샘플링
+        # → 단순 난수보다 균등 격자에 가까운 결과
+        indices    = np.round(
+            np.linspace(0, n_total - 1, n_sample)).astype(int)
+        sample_idx = sorted(set(indices.tolist()))
+        sample_nodes = [nodes[i] for i in sample_idx]
+
+        _log(f"  샘플 Node {len(sample_nodes)}개 정밀 계산 중...")
+
+        # ── 샘플 Node 정밀 계산 ──────────────────────────────
+        sample_result = self.run(gws, sample_nodes, cb=cb)
+
+        # ── 전체 Node 보간 ────────────────────────────────────
+        _log(f"  나머지 {n_total - len(sample_nodes)}개 Node 보간 중...")
+
+        # 샘플 Node의 좌표 배열 (빠른 거리 계산용)
+        s_lons = np.array([n.lon for n in sample_nodes])
+        s_lats = np.array([n.lat for n in sample_nodes])
+
+        active = [g for g in gws if g.enabled]
+        result = CoverageResult(n_total=n_total)
+        for g in active:
+            result.gw_counts[g.callsign] = 0
+
+        # 각 전체 Node에 대해 처리
+        for ni, nd in enumerate(nodes):
+            # 샘플 Node인 경우 → 정밀 결과 직접 사용
+            if ni in sample_idx:
+                si = sample_idx.index(ni)
+                if si < len(sample_result.nodes):
+                    link = sample_result.nodes[si]
+                    result.nodes.append(link)
+                    if link.covered:
+                        result.n_covered += 1
+                        result.gw_counts[link.best_gw] = (
+                            result.gw_counts.get(link.best_gw, 0) + 1)
+                    continue
+
+            # 비샘플 Node → 최근접 샘플 결과 보간
+            # 거리 기반 최근접 샘플 탐색
+            dlons = s_lons - nd.lon
+            dlats = s_lats - nd.lat
+            dists = dlons**2 + dlats**2   # 제곱 거리 (sqrt 생략으로 속도 향상)
+            si    = int(np.argmin(dists))
+
+            if si >= len(sample_result.nodes):
+                # 샘플 결과 없으면 미커버로 처리
+                result.nodes.append(LinkResult())
+                continue
+
+            src = sample_result.nodes[si]
+
+            # 거리 보정: 가장 가까운 샘플과의 실제 거리 계산
+            dist_deg = float(np.sqrt(dists[si]))   # 도 단위 거리
+
+            # 거리 보정 계수: 멀수록 약해짐 (경험식)
+            # ~0.001° = ~111m 당 약 -2dB 보정
+            pr_adj = -dist_deg * 2000.0   # dB (음수 → 멀수록 작아짐)
+            pr_adj = max(pr_adj, -20.0)   # 최대 보정 -20dB
+
+            adj_pr = src.best_pr + pr_adj if src.best_pr > -999 else -999.0
+
+            # 커버 여부 재판단 (보정된 Pr 기준)
+            cov    = adj_pr >= nd.min_rx_dbm
+
+            # gw_prs 보정
+            adj_gw_prs = {
+                cs: round(pr + pr_adj, 1)
+                for cs, pr in src.gw_prs.items()
+                if pr > -999
+            }
+
+            # SNR 보정
+            adj_snr    = src.best_snr    + pr_adj if src.best_snr    > -999 else -999.0
+            adj_margin = src.snr_margin  + pr_adj if src.snr_margin  > -999 else -999.0
+            adj_link_ok = adj_margin > 0.0
+
+            link = LinkResult(
+                covered    = cov,
+                best_gw    = src.best_gw if cov else "",
+                best_pr    = round(adj_pr, 1),
+                gw_prs     = adj_gw_prs,
+                macro_pr   = round(src.macro_pr + pr_adj, 1)
+                            if src.macro_pr > -999 else -999.0,
+                n_rx_gw    = src.n_rx_gw if cov else 0,
+                best_snr   = round(adj_snr, 2),
+                snr_margin = round(adj_margin, 2),
+                link_ok    = adj_link_ok,
+                adr_sf     = src.adr_sf,
+                toa_ms     = src.toa_ms if cov else 0.0,
+            )
+            result.nodes.append(link)
+            if cov and link.best_gw:
+                result.n_covered += 1
+                result.gw_counts[link.best_gw] = (
+                    result.gw_counts.get(link.best_gw, 0) + 1)
+
+        # ── 통계 집계 (샘플 결과에서 복사 + 전체 보정) ───────────
+        result.macro_diversity_gain = sample_result.macro_diversity_gain
+        result.avg_n_rx_gw          = sample_result.avg_n_rx_gw
+        result.adr_sf_distribution  = sample_result.adr_sf_distribution
+        result.avg_toa_ms           = sample_result.avg_toa_ms
+        result.avg_snr              = sample_result.avg_snr
+        result.avg_snr_margin       = sample_result.avg_snr_margin
+        result.cell_success_rate    = sample_result.cell_success_rate
+        result.edge_success_rate    = sample_result.edge_success_rate
+        result.gw_traffic           = sample_result.gw_traffic
+        result.avg_pdr              = sample_result.avg_pdr
+        result.n_overloaded_gw      = sample_result.n_overloaded_gw
+        result.avg_load_pct         = sample_result.avg_load_pct
+
+        _log(f"[대용량 모드] 완료: {result.n_covered}/{result.n_total}개 "
+            f"({result.coverage_pct:.1f}%)")
+        return result
+
     def run(self, gws, nodes, cb=None):
             """
             Node별 수신전력/SNR을 계산하여 커버리지 및 통신 성공율을 분석합니다.
@@ -155,13 +316,23 @@ class CoverageEngine:
                 (모델 객체 자체는 읽기 전용이므로 thread-safe)
             - 결과는 Node 인덱스 기준으로 수집 후 순서대로 조립
             """
+            """
+            Node별 수신전력/SNR을 계산하여 커버리지 및 통신 성공율을 분석합니다.
+            Node 수가 LARGE_NODE_THRESHOLD 초과 시 자동으로 샘플링 모드로 전환.
+            """
+            # ── 대용량 모드 자동 전환 ────────────────────────────
+            large_mode = self.settings.get('large_node_mode', 'auto')
+            n_nodes    = len(nodes)
+
+            if large_mode == 'always' or (
+                    large_mode == 'auto'
+                    and n_nodes > self.LARGE_NODE_THRESHOLD):
+                return self._run_sampled(gws, nodes, cb=cb)
+
+            
             def _log(m):
                 if cb: cb(m)
 
-            SF_SENS = {
-                7: -123.0, 8: -126.0, 9: -129.0,
-                10: -132.0, 11: -134.5, 12: -137.0,
-            }
             SF_TOA = {
                 7: 61.7, 8: 123.4, 9: 246.8,
                 10: 493.5, 11: 987.1, 12: 1974.1,
@@ -479,9 +650,15 @@ class CoverageEngine:
 
         eirp      = float(gw.pt_dbm + gw.gt_dbi - gw.lt_db)
         idx       = np.where(mask)[0]
+        # ── radius_km 거리 필터 (GW 반경 밖 격자점 제외) ──────
+        px_all = px.astype(np.float64)
+        py_all = py.astype(np.float64)
+        dist_m = np.hypot(px_all[idx] - gx, py_all[idx] - gy)
+        within = dist_m <= radius_km * 1000.0
+        idx    = idx[within]
         pf        = np.full(len(px), float(min_rx) - 50.0)
-        px_idx    = px.astype(np.float64)[idx]
-        py_idx    = py.astype(np.float64)[idx]
+        px_idx    = px_all[idx]
+        py_idx    = py_all[idx]
         n_workers = min(os.cpu_count() or 4, 16)
 
         if cb: cb(f"히트맵 계산 중... ({len(idx):,}개 격자점)")
@@ -604,15 +781,19 @@ class CoverageEngine:
                                       float(py_idx[k]))
                 return k, _eirp - pl
 
+            dist_m_c   = np.hypot(px_idx - gx, py_idx - gy)
+            within_c   = np.where(dist_m_c <= radius_km * 1000.0)[0]
+
             results_c = np.full(len(idx), float(min_rx) - 50.0)
             with ThreadPoolExecutor(max_workers=n_workers) as pool:
                 futures = {pool.submit(_calc_combined, k): k
-                           for k in range(len(idx))}
+                           for k in within_c}
                 for fut in as_completed(futures):
                     k, pr = fut.result()
                     results_c[k] = pr
 
-            for k, i in enumerate(idx):
+            for k in within_c:
+                i  = idx[k]
                 pr = results_c[k]
                 if pr > pr_max_grid[i]:
                     pr_max_grid[i] = pr
@@ -764,7 +945,7 @@ class CoverageEngine:
             denom      = max(pr_max_lv - (pr_min - 30.0), 1.0)
             alpha = np.where(
                 assigned,
-                (0.40 + 0.35 * np.clip(
+                (0.55 + 0.35 * np.clip(
                     (ps_clipped - (pr_min - 30.0)) / denom, 0, 1)) * 255,
                 0
             ).astype(np.uint8)
@@ -835,7 +1016,7 @@ class CoverageEngine:
 
             ps_in_mask = ps[gw_mask]
             pr_range   = max(float(ps_in_mask.max()) - pr_min, 1.0)
-            alpha_full = (0.45 + 0.40 * np.clip(
+            alpha_full = (0.55 + 0.40 * np.clip(
                 (ps - pr_min) / pr_range, 0, 1)) * 255
             alpha_full = alpha_full.astype(np.uint8)
 
