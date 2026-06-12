@@ -291,9 +291,15 @@ class NodeListWindow(QDialog):
         n = len(self._nodes) + 1
         p = self.parent()
         s = getattr(p, '_settings', {})
+        spatial = getattr(self.parent(), 'spatial', None)
+        cx = 127.10; cy = 37.40
+        if spatial is not None and spatial.bounds is not None:
+            b  = spatial.bounds
+            cx = (b[0] + b[2]) / 2
+            cy = (b[1] + b[3]) / 2
         self._nodes.append(NodeEntry(
             callsign       = f"Node{n}",
-            lon            = 127.10, lat=37.40,
+            lon            = cx, lat=cy,
             gr_dbi         = s.get('nd_gr_dbi', 2.15),
             lr_db          = s.get('nd_lr_db',  0.0),
             hm_m           = s.get('nd_hm_m',   1.5),

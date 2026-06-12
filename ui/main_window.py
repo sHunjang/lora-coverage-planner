@@ -249,7 +249,7 @@ def _calc_contour_segments(lon_ax, lat_ax, pr_m, level):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, shp_path, dem_path):
+    def __init__(self, shp_path, dem_path, spatial=None):
         super().__init__()
         self.setWindowTitle("LoRa Coverage Planner")
         geo = QApplication.primaryScreen().availableGeometry()
@@ -278,8 +278,12 @@ class MainWindow(QMainWindow):
         self._settings = load_settings()
 
         self._build_ui()
-        self._load_spatial()
-        
+        if spatial is not None:
+            self.spatial = spatial
+            self.map_w.set_bounds(tuple(spatial.bounds))
+            self.map_w.refresh()
+        else:
+            self._load_spatial()
         self._load_session()
 
     def closeEvent(self, event):
@@ -1790,12 +1794,17 @@ class MainWindow(QMainWindow):
         self.status.showMessage("오류 발생 — 콘솔 확인")
 
     def _load_spatial(self):
+        # main.py의 _launch()에서 이미 로드해서 주입하므로
+        # 여기서는 spatial이 없을 때만 로드 (fallback)
+        if self.spatial is not None:
+            return
         from core.dem_loader import SpatialData
         self.status.showMessage("공간 데이터 로드 중...")
         try:
             self.spatial = SpatialData(self._shp, self._dem)
             self.spatial.load()
             self.status.showMessage("준비")
+            self.map_w.set_bounds(tuple(self.spatial.bounds))
         except Exception as e:
             self.status.showMessage(f"공간 데이터 로드 실패: {e}")
         self.map_w.refresh()

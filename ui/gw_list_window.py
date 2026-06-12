@@ -161,9 +161,16 @@ class GWListWindow(QDialog):
         n  = len(self._gws) + 1
         # 부모(MainWindow)에서 설정값 가져오기
         s  = getattr(self.parent(), '_settings', {})
+        # 현재 로드된 지역 중심 좌표 사용
+        spatial = getattr(self.parent(), 'spatial', None)
+        cx = 127.10; cy = 37.40  # 폴백 기본값
+        if spatial is not None and spatial.bounds is not None:
+            b  = spatial.bounds  # (lon_min, lat_min, lon_max, lat_max)
+            cx = (b[0] + b[2]) / 2
+            cy = (b[1] + b[3]) / 2
         gw = GWEntry(
             callsign = f"GW{n}",
-            lon      = 127.10, lat=37.40,
+            lon      = cx, lat=cy,
             pt_dbm   = s.get('gw_pt_dbm', 14.0),
             gt_dbi   = s.get('gw_gt_dbi', 2.15),
             lt_db    = s.get('gw_lt_db',  0.0),

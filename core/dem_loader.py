@@ -57,12 +57,17 @@ class SpatialData:
         self.oy            = 0.0
 
         # 좌표 변환기
-        self._to_3857 = Transformer.from_crs(
-            "EPSG:4326", "EPSG:3857", always_xy=True)
-        self._to_4326 = Transformer.from_crs(
-            "EPSG:3857", "EPSG:4326", always_xy=True)
+        # DEM 좌표계 (load() 후 확정)
+        self.dem_crs  = "EPSG:3857"
+        # 좌표 변환기 (load()에서 DEM CRS 확정 후 생성)
+        self._to_proj = None
+        self._to_4326 = None
+        # 토지피복 래스터 (set_landcover()로 설정, 없으면 DSM 추정 방식 사용)
+        self._lc_raster = None   # 2D ndarray, DEM과 동일 shape
+        self._lc_map    = {}     # {토지피복코드: env코드(1~4)}
 
     # ── 데이터 로드 ──────────────────────────────────────────
+    # 변경 후
     def load(self, progress_cb=None):
         def _log(msg: str):
             if progress_cb:
@@ -72,17 +77,37 @@ class SpatialData:
 
         _log("SHP 로드 중...")
         try:
-            self.gdf_3857 = gpd.read_file(self.shp_path, engine='pyogrio')
+            gdf_raw = gpd.read_file(self.shp_path, engine='pyogrio')
         except Exception:
-            self.gdf_3857 = gpd.read_file(self.shp_path)
-        self.polygon_3857 = self.gdf_3857.geometry.iloc[0]
-        self.gdf_4326     = self.gdf_3857.to_crs(epsg=4326)
+            gdf_raw = gpd.read_file(self.shp_path)
+
+        if gdf_raw.crs is None:
+            _log("  ⚠ SHP 좌표계(.prj) 없음 — EPSG:3857 가정")
+            gdf_raw = gdf_raw.set_crs(epsg=3857)
+
+        self.gdf_4326     = gdf_raw.to_crs(epsg=4326)
         self.polygon_4326 = self.gdf_4326.geometry.iloc[0]
         self.bounds       = self.gdf_4326.total_bounds
         _log(f"  경계 로드 완료: {self.polygon_4326.bounds}")
 
         _log("DEM 로드 및 마스킹 중...")
         with rasterio.open(self.dem_path) as src:
+            # DEM 좌표계 자동 감지
+            if src.crs is not None:
+                self.dem_crs = src.crs.to_string()
+            else:
+                _log("  ⚠ DEM 좌표계 없음 — EPSG:3857 가정")
+                self.dem_crs = "EPSG:3857"
+            _log(f"  DEM 좌표계: {self.dem_crs}")
+
+            # NoData 자동 감지
+            src_nodata = src.nodata if src.nodata is not None else -9999.0
+
+            # 폴리곤을 DEM 좌표계로 변환 후 마스킹
+            gdf_dem           = gdf_raw.to_crs(self.dem_crs)
+            self.gdf_3857     = gdf_dem          # 변수명 호환 유지
+            self.polygon_3857 = gdf_dem.geometry.iloc[0]
+
             out_image, self.dem_transform = rio_mask(
                 src,
                 [mapping(self.polygon_3857)],
@@ -91,14 +116,42 @@ class SpatialData:
             )
             raw = out_image[0].astype(np.float32)
 
-        raw[raw <= -9998] = np.nan
-        raw[raw < 0]      = np.nan
+        # NoData 처리 (메타데이터 값 + 일반 음수)
+        raw[raw == src_nodata] = np.nan
+        raw[raw <= -9998]      = np.nan
+        raw[raw < 0]           = np.nan
         self.dem = raw
 
         self.dem_rows, self.dem_cols = self.dem.shape
         self.res = self.dem_transform.a
         self.ox  = self.dem_transform.c
         self.oy  = self.dem_transform.f
+
+        # 좌표 변환기 — DEM CRS 기반으로 생성
+        self._to_proj = Transformer.from_crs(
+            "EPSG:4326", self.dem_crs, always_xy=True)
+        self._to_4326 = Transformer.from_crs(
+            self.dem_crs, "EPSG:4326", always_xy=True)
+
+        # 고도 분포 기반 환경 분류 기준 자동 조정
+        valid = self.dem[~np.isnan(self.dem)]
+        if len(valid) > 0:
+            self._elev_p10  = float(np.percentile(valid, 10))
+            self._elev_p50  = float(np.percentile(valid, 50))
+            self._elev_p90  = float(np.percentile(valid, 90))
+            # 산지 판별 기준: 지역 고도 분포에서 동적 계산
+            # p90(상위10%) 기준으로 산지 임계값 결정
+            self._mountain_thresh = max(
+                self._elev_p10 + 20.0,
+                self._elev_p50 * 0.8)
+            _log(f"  고도 분포: "
+                 f"p10={self._elev_p10:.0f}m "
+                 f"p50={self._elev_p50:.0f}m "
+                 f"p90={self._elev_p90:.0f}m "
+                 f"| 산지 기준 >{self._mountain_thresh:.0f}m")
+        else:
+            self._elev_p10 = self._elev_p50 = self._elev_p90 = 50.0
+            self._mountain_thresh = 60.0
 
         valid_px = int(np.sum(~np.isnan(self.dem)))
         _log(f"  DEM 로드 완료: {self.dem_rows}×{self.dem_cols}px "
@@ -147,7 +200,7 @@ class SpatialData:
 
     # ── 좌표 변환 헬퍼 ───────────────────────────────────────
     def lonlat_to_xy(self, lon, lat):
-        return self._to_3857.transform(lon, lat)
+        return self._to_proj.transform(lon, lat)
 
     def xy_to_lonlat(self, x, y):
         return self._to_4326.transform(x, y)
@@ -172,6 +225,18 @@ class SpatialData:
 
         Returns: 1=Dense Urban, 2=Urban, 3=Suburban, 4=Open
         """
+        
+        # ── 토지피복 래스터 우선 조회 ─────────────────────────
+        if self._lc_raster is not None:
+            col = int(np.clip((x3857 - self.ox) / self.res,
+                              0, self.dem_cols - 1))
+            row = int(np.clip((self.oy - y3857) / self.res,
+                              0, self.dem_rows - 1))
+            lc_code = int(self._lc_raster[row, col])
+            if lc_code in self._lc_map:
+                return self._lc_map[lc_code]
+            # 매핑에 없는 코드면 DSM 추정으로 폴백
+
         col = int(np.clip((x3857 - self.ox) / self.res,
                           radius_px, self.dem_cols - radius_px - 1))
         row = int(np.clip((self.oy - y3857) / self.res,
@@ -194,7 +259,8 @@ class SpatialData:
         # 성남시 기준: 평지 고도 30~50m, 산지 60m 이상
         # 산지 특징: terrain 자체가 높고 경사(std)가 크다
         # 건물 특징: terrain은 낮고(평지) build_h와 std가 크다
-        is_mountain = (terrain > 60.0 and std_h > 8.0)
+        mt = getattr(self, '_mountain_thresh', 60.0)
+        is_mountain = (terrain > mt and std_h > 8.0)
         if is_mountain:
             return 4  # Open — 산지/공원/자연 지형
 
@@ -208,3 +274,22 @@ class SpatialData:
             return 3  # Suburban (저층 주거지역)
         else:
             return 4  # Open (도로/공원/하천/개활지)
+
+    def set_landcover(self, lc_raster: np.ndarray, lc_map: dict):
+        """
+        토지피복 래스터를 등록합니다. 등록 후 get_env_code()에서
+        DSM 추정 대신 토지피복 코드를 우선 사용합니다.
+
+        Parameters
+        ----------
+        lc_raster : DEM과 동일 shape의 2D 배열 (토지피복 코드값)
+        lc_map    : {토지피복코드(int): env코드(1~4)}
+                    예: {110: 1, 120: 2, 400: 4, 500: 4}
+        """
+        if lc_raster.shape != self.dem.shape:
+            raise ValueError(
+                f"토지피복 래스터 크기 {lc_raster.shape}가 "
+                f"DEM 크기 {self.dem.shape}와 다릅니다.")
+        self._lc_raster = lc_raster
+        self._lc_map    = lc_map
+        print(f"[토지피복] 등록 완료: {len(lc_map)}개 코드 매핑")

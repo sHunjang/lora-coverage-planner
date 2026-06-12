@@ -15,7 +15,6 @@ from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtWebChannel import QWebChannel
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
 
-BOUNDS = (127.02772, 37.33338, 127.19584, 37.47482)
 
 # GW별 고유 색상 팔레트 (Folium 지원 색상명)
 GW_COLORS = [
@@ -75,6 +74,8 @@ class MapWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        # 기본 지도 중심 (SHP 로드 전 초기값 — 대한민국 중심)
+        self._bounds = (126.0, 34.0, 130.0, 38.5)
         self._build()
 
     def _build(self):
@@ -94,6 +95,13 @@ class MapWidget(QWidget):
 
         self.refresh()
 
+    def set_bounds(self, bounds):
+            """
+            SpatialData 로드 후 지역 경계 설정.
+            bounds: (lon_min, lat_min, lon_max, lat_max) — EPSG:4326
+            """
+            self._bounds = bounds
+
     def refresh(self, gws=None, nodes=None, result=None,
                 heatmaps=None, selected_gws=None, map_tile=None,
                 measure_pts=None, field_data=None):
@@ -111,9 +119,20 @@ class MapWidget(QWidget):
           8. GW 마커
           9. 거리 측정선
         """
-        c    = [(BOUNDS[1] + BOUNDS[3]) / 2, (BOUNDS[0] + BOUNDS[2]) / 2]
+        b    = self._bounds  # (lon_min, lat_min, lon_max, lat_max)
+        c    = [(b[1] + b[3]) / 2, (b[0] + b[2]) / 2]
+        # 경계 크기에 따라 줌 레벨 자동 결정
+        span = max(b[2] - b[0], b[3] - b[1])
+        if span < 0.1:
+            zoom = 14
+        elif span < 0.5:
+            zoom = 12
+        elif span < 2.0:
+            zoom = 10
+        else:
+            zoom = 8
         tile = map_tile or "CartoDB Voyager"
-        m    = folium.Map(location=c, zoom_start=12,
+        m    = folium.Map(location=c, zoom_start=zoom,
                           tiles=tile, prefer_canvas=True)
 
         # ── GW별 색상 맵 생성 ────────────────────────────────

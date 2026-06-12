@@ -14,7 +14,7 @@
   "nd_indoor_loss": 0.0,
   "heatmap_step": 0.0008,
   "heatmap_diff": true,
-  "map_tile": "OpenStreetMap",
+  "map_tile": "CartoDB Voyager",
   "prop_model": "smartcity",
   "snr_margin_db": 10.0,
   "noise_figure_db": 6.0,

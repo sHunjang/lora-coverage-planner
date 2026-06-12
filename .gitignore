@@ -1,37 +1,37 @@
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-.Python
-*.egg-info/
-dist/
-build/
-*.spec
+# ── 보안 (절대 커밋 금지) ──
+core/_secret_key.py
+tools/
+license.dat
 
-# 데이터 파일 (용량 큼 — 별도 배포)
-/data/
+# ── 로컬 설정 / 세션 (실행 시 자동 생성) ──
+app_config.json
+data_paths.json
+session.json
+settings.json
 
-# 캐시
-cache/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-
-# OS
-.DS_Store
-Thumbs.db
-
-# 로그
-*.log
-
+# ── 사용자 생성물 ──
+*.lorascape
+gw_list.csv
+nodelist_*.csv
 results/
 
-Heatmap-Pixel_setup.md
+# ── 대용량 / 저작권 데이터 ──
+data/
 
-*.csv
-assets/
+# ── 파이썬 캐시 / 가상환경 ──
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
 
-*.pdf
+# ── PyInstaller 빌드 산출물 ──
+build/
+dist/
+# LoRaPlanner.spec  ← 빌드 설정은 공유하려면 주석 유지(=올림)
+
+# ── OS / 에디터 ──
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
