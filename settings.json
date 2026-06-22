@@ -1,7 +1,7 @@
 {
   "fc_mhz": 915.0,
   "env": 0,
-  "n_samples": 200,
+  "n_samples": 300,
   "diff_order": 2,
   "gw_pt_dbm": 14.0,
   "gw_gt_dbi": 2.15,
@@ -14,7 +14,7 @@
   "nd_indoor_loss": 0.0,
   "heatmap_step": 0.0008,
   "heatmap_diff": true,
-  "map_tile": "CartoDB Voyager",
+  "map_tile": "OpenStreetMap",
   "prop_model": "smartcity",
   "snr_margin_db": 10.0,
   "noise_figure_db": 6.0,
@@ -23,5 +23,7 @@
   "large_node_mode": "auto",
   "large_node_threshold": 1000,
   "large_sample_ratio": 0.3,
-  "radius_km": 5.0
+  "radius_km": 5.0,
+  "heatmap_opacity": 1.0,
+  "coverage_opacity": 0.5
 }

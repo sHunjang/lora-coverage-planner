@@ -1,5 +1,9 @@
+from core.app_logger import install_log_capture
+install_log_capture()
+
 # main.py — LoRa Coverage Planner 진입점
 import sys, os, json
+# os.environ['QTWEBENGINE_REMOTE_DEBUGGING'] = '9223'
 
 if getattr(sys, 'frozen', False):
     _base = sys._MEIPASS
@@ -340,6 +344,17 @@ if __name__ == "__main__":
         setup_dlg = InitialSetupDialog()
         if setup_dlg.exec_() != QDialog.Accepted:
             sys.exit(0)   # 설정 안 하면 종료
+
+    # ── 라이선스 인증 확인 ──────────────────────────────────
+    from core.license import is_licensed
+    if not is_licensed():
+        from ui.license_dialog import LicenseDialog
+        lic_dlg = LicenseDialog()
+        if lic_dlg.exec_() != QDialog.Accepted:
+            QMessageBox.information(
+                None, "종료",
+                "라이선스 인증이 필요합니다. 프로그램을 종료합니다.")
+            sys.exit(0)
 
     # ── 데이터 경로 결정 ─────────────────────────────────────
     result = _resolve_data_paths()

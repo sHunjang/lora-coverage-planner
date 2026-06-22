@@ -10,11 +10,11 @@
 
 import folium, tempfile, math
 import numpy as np
-from PyQt5.QtWidgets import QWidget, QVBoxLayout
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
+from PyQt5.QtGui import QMovie
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtWebChannel import QWebChannel
-from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
-
+from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, Qt
 
 # GW별 고유 색상 팔레트 (Folium 지원 색상명)
 GW_COLORS = [
@@ -78,12 +78,15 @@ class MapWidget(QWidget):
         self._bounds = (126.0, 34.0, 130.0, 38.5)
         self._build()
 
+# 변경 후
+# 변경 후 — webChannel 초기화 복구
     def _build(self):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         self.view = QWebEngineView()
         lay.addWidget(self.view)
 
+        # ── WebChannel 브릿지 초기화 (★ 복구 — 드래그/클릭 핵심) ──
         self.channel = QWebChannel()
         self.bridge  = MapBridge()
         self.channel.registerObject("bridge", self.bridge)
@@ -93,7 +96,90 @@ class MapWidget(QWidget):
         self.bridge.gw_dragged.connect(self.sig_gw_dragged)
         self.bridge.nd_dragged.connect(self.sig_nd_dragged)
 
+        # [디버그 — 확인 끝났으면 제거 권장]
+        # import os
+        # os.environ['QTWEBENGINE_REMOTE_DEBUGGING'] = '9223'
+
+        # ── 로딩 오버레이 (지도 위에 겹쳐 표시) ──────────────
+        self._loading_overlay = QWidget(self)
+        self._loading_overlay.setStyleSheet(
+            "background: rgba(15, 17, 23, 160);")
+        self._loading_overlay.hide()
+        self._loading_overlay.setAttribute(Qt.WA_TransparentForMouseEvents)
+
+        ov_lay = QVBoxLayout(self._loading_overlay)
+        ov_lay.setAlignment(Qt.AlignCenter)
+
+        self._spinner_lbl = QLabel()
+        self._spinner_lbl.setAlignment(Qt.AlignCenter)
+        self._spinner_lbl.setFixedSize(64, 64)
+        ov_lay.addWidget(self._spinner_lbl, alignment=Qt.AlignCenter)
+
+        self._loading_text = QLabel("히트맵 계산 중...")
+        self._loading_text.setAlignment(Qt.AlignCenter)
+        self._loading_text.setStyleSheet(
+            "color:#e0e4ef; font-size:13px; font-weight:bold; "
+            "padding-top:12px; background:transparent;")
+        ov_lay.addWidget(self._loading_text)
+
+        self._spinner_angle = 0
+        self._spinner_timer = None
+        self._init_spinner()
+
         self.refresh()
+
+    def _init_spinner(self):
+        """QTimer로 직접 회전 애니메이션 그리기 (외부 리소스 불필요)."""
+        from PyQt5.QtCore import QTimer
+        self._spinner_timer = QTimer(self)
+        self._spinner_timer.timeout.connect(self._rotate_spinner)
+        self._spinner_timer.setInterval(40)  # 25fps
+
+    def _rotate_spinner(self):
+        self._spinner_angle = (self._spinner_angle + 12) % 360
+        self._draw_spinner()
+
+    def _draw_spinner(self):
+        from PyQt5.QtGui import QPixmap, QPainter, QPen, QColor
+        pix = QPixmap(64, 64)
+        pix.fill(Qt.transparent)
+        p = QPainter(pix)
+        p.setRenderHint(QPainter.Antialiasing)
+        pen = QPen(QColor("#4f8ef7"))
+        pen.setWidth(5)
+        pen.setCapStyle(Qt.RoundCap)
+        p.setPen(pen)
+        p.translate(32, 32)
+        p.rotate(self._spinner_angle)
+        # 3/4 원호만 그려서 회전감 부여
+        p.drawArc(-24, -24, 48, 48, 0, 270 * 16)
+        p.end()
+        self._spinner_lbl.setPixmap(pix)
+
+    def show_loading(self, text="히트맵 계산 중..."):
+        """지도 위에 로딩 오버레이 표시."""
+        self._loading_text.setText(text)
+        self._loading_overlay.setGeometry(self.rect())
+        self._loading_overlay.show()
+        self._loading_overlay.raise_()
+        if self._spinner_timer:
+            self._spinner_timer.start()
+
+    def update_loading_text(self, text: str):
+        """진행률 등 텍스트만 갱신."""
+        if self._loading_overlay.isVisible():
+            self._loading_text.setText(text)
+
+    def hide_loading(self):
+        """로딩 오버레이 숨김."""
+        self._loading_overlay.hide()
+        if self._spinner_timer:
+            self._spinner_timer.stop()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, '_loading_overlay') and self._loading_overlay.isVisible():
+            self._loading_overlay.setGeometry(self.rect())
 
     def set_bounds(self, bounds):
             """
@@ -104,7 +190,7 @@ class MapWidget(QWidget):
 
     def refresh(self, gws=None, nodes=None, result=None,
                 heatmaps=None, selected_gws=None, map_tile=None,
-                measure_pts=None, field_data=None):
+                measure_pts=None, field_data=None, settings=None):
         """
         지도를 새로 렌더링합니다.
 
@@ -119,6 +205,11 @@ class MapWidget(QWidget):
           8. GW 마커
           9. 거리 측정선
         """
+
+        _s = settings or {}
+        _hm_opacity  = float(_s.get("heatmap_opacity",  0.65))
+        _cov_opacity = float(_s.get("coverage_opacity", 0.40))        
+
         b    = self._bounds  # (lon_min, lat_min, lon_max, lat_max)
         c    = [(b[1] + b[3]) / 2, (b[0] + b[2]) / 2]
         # 경계 크기에 따라 줌 레벨 자동 결정
@@ -202,7 +293,7 @@ class MapWidget(QWidget):
                     folium.raster_layers.ImageOverlay(
                         image=hm['url'],
                         bounds=hm['bounds'],
-                        opacity=0.65,        # 반투명 — Node 마커 가리지 않도록
+                        opacity=_hm_opacity,
                         interactive=False,
                         cross_origin=False,
                         zindex=2,
@@ -214,7 +305,7 @@ class MapWidget(QWidget):
                     for cl in hm['contours']:
                         cl_lyr = folium.FeatureGroup(
                             name=f"{hm['callsign']} {cl['label']} 등고선",
-                            show=True)
+                            show=False)
                         for seg in cl['segments']:
                             folium.PolyLine(
                                 locations=seg,
@@ -274,6 +365,9 @@ class MapWidget(QWidget):
                 info = result.nodes[ni]
                 if not info.covered:
                     continue
+                # GW 필터링: 선택되지 않은 GW의 Node는 표시 안 함
+                if selected_gws and info.best_gw not in selected_gws:
+                    continue
 
                 pr    = info.best_pr
                 color = _pr_to_color(pr)
@@ -290,7 +384,7 @@ class MapWidget(QWidget):
                     color=color,
                     fill=True,
                     fill_color=color,
-                    fill_opacity=0.40,
+                    fill_opacity=_cov_opacity,
                     weight=0,
                     tooltip=tip,
                 ).add_to(cov_hm_lyr)
@@ -347,8 +441,13 @@ class MapWidget(QWidget):
             shadow_lyr.add_to(m)
 
         # ── Node 마커 ────────────────────────────────────────
+# 변경 후
         if nodes:
             nd_lyr = folium.FeatureGroup(name="Nodes", show=True)
+            # GW가 선택된 상태면, 선택 GW에 연결 안 된 Node는 흐리게 표시
+            filtering = bool(selected_gws)
+            sel_set   = set(selected_gws) if selected_gws else set()
+
             for ni, nd in enumerate(nodes):
                 if result and ni < len(result.nodes):
                     info = result.nodes[ni]
@@ -362,9 +461,18 @@ class MapWidget(QWidget):
                             f"({n_rx}개 수신)")
                     marker_color = (gw_color_map.get(info.best_gw, 'gray')
                                     if cov and info.best_gw else 'gray')
+                    is_selected_link = cov and info.best_gw in sel_set
                 else:
-                    marker_color = 'gray'
-                    tip          = nd.callsign
+                    marker_color      = 'gray'
+                    tip               = nd.callsign
+                    is_selected_link  = False
+
+                # 필터링 중이고 선택 GW와 연결 안 된 Node → 흐리게(회색, 반투명)
+                if filtering and not is_selected_link:
+                    marker_color = 'lightgray'
+                    opacity      = 0.35
+                else:
+                    opacity      = 1.0
 
                 folium.Marker(
                     location=[nd.lat, nd.lon],
@@ -376,6 +484,7 @@ class MapWidget(QWidget):
                         prefix='fa',
                     ),
                     draggable=True,
+                    opacity=opacity,
                 ).add_to(nd_lyr)
             nd_lyr.add_to(m)
 

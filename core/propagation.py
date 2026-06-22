@@ -470,6 +470,7 @@ class PathLossModel:
         self._res  = spatial.res
         self._rows = spatial.dem_rows
         self._cols = spatial.dem_cols
+        self._env_cache: dict = {}
 
     # ── DEM 단면 샘플링 ──────────────────────────────────────
     def _sample_profile(self, x1: float, y1: float,
@@ -494,14 +495,20 @@ class PathLossModel:
         return dists, elevs
 
     # ── 경로 환경 코드 결정 ──────────────────────────────────
-    def _resolve_env(self, x1: float, y1: float,
-                     x2: float, y2: float) -> int:
+    def _resolve_env(self, x1, y1, x2, y2) -> int:
         if not self._auto_env:
             return self._fixed_env
+        # 격자점 좌표를 DEM 픽셀 단위로 반올림해서 캐시 키 생성
+        key = (round(x1/self._res), round(y1/self._res),
+               round(x2/self._res), round(y2/self._res))
+        if key in self._env_cache:
+            return self._env_cache[key]
         n  = self.n_samples
         xs = np.linspace(x1, x2, n)
         ys = np.linspace(y1, y2, n)
-        return _get_path_env(self.spatial, xs, ys)
+        result = _get_path_env(self.spatial, xs, ys)
+        self._env_cache[key] = result
+        return result
 
     # ── 환경 코드로 기본 모델 경로 손실 계산 ─────────────────
     def _pl_base(self, d_km: float, env: int) -> float:
@@ -530,10 +537,17 @@ class PathLossModel:
         # 클러터 환경 결정
         if self._auto_env and self.prop_model != 'cost231':
             # [방안 B] 경로 ahm 가중평균으로 부드러운 전이 (smartcity 전용)
-            xs = np.linspace(x1, x2, self.n_samples)
-            ys = np.linspace(y1, y2, self.n_samples)
-            ahm_avg = _get_path_ahm_avg(
-                self.spatial, xs, ys, self._hm, self._fc)
+            # 격자점 좌표를 DEM 픽셀 단위로 반올림해서 캐시 키 생성
+            key = (round(x1 / self._res), round(y1 / self._res),
+                   round(x2 / self._res), round(y2 / self._res))
+            if key in self._env_cache:
+                ahm_avg = self._env_cache[key]
+            else:
+                xs = np.linspace(x1, x2, self.n_samples)
+                ys = np.linspace(y1, y2, self.n_samples)
+                ahm_avg = _get_path_ahm_avg(
+                    self.spatial, xs, ys, self._hm, self._fc)
+                self._env_cache[key] = ahm_avg
             pl_base = self.songs.bpl(d_km) - ahm_avg
             env     = 0  # 자동 (가중평균 적용됨 표시)
         else:

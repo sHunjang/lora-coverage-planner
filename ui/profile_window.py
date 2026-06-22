@@ -87,6 +87,10 @@ class ProfileWindow(QDialog):
             self.cb_nd.addItem(n.callsign)
         ctrl.addWidget(self.cb_nd)
 
+        # 드롭다운 변경 시 자동으로 단면도 다시 그리기
+        self.cb_gw.currentIndexChanged.connect(self._draw)
+        self.cb_nd.currentIndexChanged.connect(self._draw)
+
         self.btn_draw = QPushButton("단면도 그리기")
         self.btn_draw.setStyleSheet(
             f"QPushButton{{background:#1c3a5a;color:#7ab8e8;"
@@ -293,3 +297,5 @@ class ProfileWindow(QDialog):
             f"background:#1e2130;border:1px solid #2a2f3b;"
             f"border-radius:6px;")
         self.lbl.setTextFormat(Qt.RichText)
+
+        self.canvas.draw()

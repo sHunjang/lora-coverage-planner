@@ -316,10 +316,6 @@ class CoverageEngine:
                 (모델 객체 자체는 읽기 전용이므로 thread-safe)
             - 결과는 Node 인덱스 기준으로 수집 후 순서대로 조립
             """
-            """
-            Node별 수신전력/SNR을 계산하여 커버리지 및 통신 성공율을 분석합니다.
-            Node 수가 LARGE_NODE_THRESHOLD 초과 시 자동으로 샘플링 모드로 전환.
-            """
             # ── 대용량 모드 자동 전환 ────────────────────────────
             large_mode = self.settings.get('large_node_mode', 'auto')
             n_nodes    = len(nodes)
@@ -630,7 +626,7 @@ class CoverageEngine:
             mask = np.array([self.spatial.polygon_4326.contains(
                 Point(lo, la)) for lo, la in zip(fl, fa)])
 
-        tr = Transformer.from_crs('EPSG:4326', 'EPSG:3857', always_xy=True)
+        tr = Transformer.from_crs('EPSG:4326', self.spatial.dem_crs, always_xy=True)
         px, py         = tr.transform(fl, fa)
         gx_arr, gy_arr = tr.transform(gw.lon, gw.lat)
         gx, gy         = float(gx_arr), float(gy_arr)
@@ -741,7 +737,7 @@ class CoverageEngine:
             mask = np.array([self.spatial.polygon_4326.contains(
                 Point(lo, la)) for lo, la in zip(fl, fa)])
 
-        tr = Transformer.from_crs('EPSG:4326', 'EPSG:3857', always_xy=True)
+        tr = Transformer.from_crs('EPSG:4326', self.spatial.dem_crs, always_xy=True)
         px, py = tr.transform(fl, fa)
         px_f   = px.astype(np.float64)
         py_f   = py.astype(np.float64)
@@ -945,7 +941,7 @@ class CoverageEngine:
             denom      = max(pr_max_lv - (pr_min - 30.0), 1.0)
             alpha = np.where(
                 assigned,
-                (0.55 + 0.35 * np.clip(
+                (0.65 + 0.35 * np.clip(
                     (ps_clipped - (pr_min - 30.0)) / denom, 0, 1)) * 255,
                 0
             ).astype(np.uint8)
@@ -1016,7 +1012,7 @@ class CoverageEngine:
 
             ps_in_mask = ps[gw_mask]
             pr_range   = max(float(ps_in_mask.max()) - pr_min, 1.0)
-            alpha_full = (0.55 + 0.40 * np.clip(
+            alpha_full = (0.65 + 0.40 * np.clip(
                 (ps - pr_min) / pr_range, 0, 1)) * 255
             alpha_full = alpha_full.astype(np.uint8)
 

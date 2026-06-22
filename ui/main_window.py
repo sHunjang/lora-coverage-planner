@@ -438,13 +438,17 @@ class MainWindow(QMainWindow):
         act_report = QAction("📄  리포트",  self)
         # act_manual  = QAction("📖  매뉴얼", self)
         act_compare = QAction("📊  결과 비교", self)
+        act_log     = QAction("📜  로그",       self)
+        act_perf    = QAction("⚡  성능",       self)
+        act_validate= QAction("✔  데이터 검증", self)
 
         for a in [act_gw, act_node, act_opt, act_legend, act_graph, act_cfg,
                   act_dist,
                     act_proj_save, act_proj_load,
                   act_save, 
                   act_load, 
-                  act_report, act_compare, act_field]:
+                  act_report, act_compare, act_field,
+                  act_log, act_perf, act_validate]:
             tb.addAction(a)
 
         act_gw.triggered.connect(self._open_gw_list)
@@ -464,6 +468,9 @@ class MainWindow(QMainWindow):
         act_field.triggered.connect(self._open_field_data)
         act_proj_save.triggered.connect(self._save_project)
         act_proj_load.triggered.connect(self._load_project)
+        act_log.triggered.connect(self._open_log_viewer)
+        act_perf.triggered.connect(self._open_perf_monitor)
+        act_validate.triggered.connect(self._open_data_validation)
 
         from PyQt5.QtWidgets import QSplitter
         splitter = QSplitter(Qt.Horizontal)
@@ -953,6 +960,23 @@ class MainWindow(QMainWindow):
         self._compare_win.show()
         self._compare_win.raise_()
 
+    def _open_log_viewer(self):
+        from ui.log_viewer_window import LogViewerWindow
+        dlg = LogViewerWindow(self)
+        dlg.show()
+
+    def _open_perf_monitor(self):
+        from ui.perf_monitor_window import PerfMonitorWindow
+        dlg = PerfMonitorWindow(self)
+        dlg.show()
+
+    def _open_data_validation(self):
+        from ui.data_validation_window import DataValidationWindow
+        gws   = self._gw_win.get_gws()    if self._gw_win   else []
+        nodes = self._node_win.get_nodes() if self._node_win else []
+        dlg = DataValidationWindow(gws, nodes, self.spatial, self)
+        dlg.show()
+
     def _open_field_data(self):
         """실측 데이터 CSV 불러오기 / 초기화."""
         from PyQt5.QtWidgets import QMenu
@@ -1142,6 +1166,8 @@ class MainWindow(QMainWindow):
 
         self.status.showMessage(
             f"커버리지 분석 중: GW {len(gws)}개 × Node {len(nodes)}개...")
+        self.map_w.show_loading(
+            f"커버리지 분석 중: GW {len(gws)}개 × Node {len(nodes)}개...")
 
         w = CoverageWorker(self.spatial, gws, nodes, settings=self._settings)
         t = QThread()
@@ -1151,6 +1177,7 @@ class MainWindow(QMainWindow):
         w.sig_done.connect(t.quit)
         w.sig_err.connect(t.quit)
         w.sig_err.connect(lambda m: print(f"[COV ERR] {m}"))
+        w.sig_err.connect(lambda m: self.map_w.hide_loading())   # ← 에러 시 해제
         t.finished.connect(w.deleteLater)
         t.finished.connect(t.deleteLater)
         t.finished.connect(self._on_cov_thread_finished)
@@ -1164,6 +1191,7 @@ class MainWindow(QMainWindow):
         self._cov_worker = None
 
     def _on_coverage_done(self, result):
+        self.map_w.hide_loading()
         self._result = result
         gws   = self._gw_win.get_gws()    if self._gw_win   else []
         nodes = self._node_win.get_nodes() if self._node_win else []
@@ -1200,21 +1228,24 @@ class MainWindow(QMainWindow):
             selected_gws=sel,
             map_tile=tile,
             measure_pts=pts,
-            field_data=self._field_data or None)
+            field_data=self._field_data or None,
+            settings=self._settings)
+
 
     def _clear_heatmap(self):
         self._heatmaps = []
-        self._result   = None
+        # _result는 유지 — Node 색(커버리지 결과)은 남김
         gws   = self._gw_win.get_gws()    if self._gw_win   else []
         nodes = self._node_win.get_nodes() if self._node_win else []
         if callable(nodes): nodes = []
         if callable(gws):   gws   = []
         self.map_w.refresh(
             gws=gws, nodes=nodes,
-            result=None, heatmaps=[], selected_gws=[],
+            result=self._result,   # 결과 유지
+            heatmaps=[], selected_gws=[],
             map_tile=self._settings.get('map_tile', 'CartoDB Voyager'))
         self.lbl.setText("─")
-        self.status.showMessage("커버리지 초기화")
+        self.status.showMessage("히트맵 초기화 (커버리지 결과 유지)")
 
     # ── 드래그 이벤트 ────────────────────────────────────────
 
@@ -1488,23 +1519,35 @@ class MainWindow(QMainWindow):
             fc  = merged.get('fc_mhz', 915.0)
 
             self.status.showMessage(
-                f"히트맵 계산 중: {', '.join(g.callsign for g in gws)}")
+                f"GW 커버리지 계산 중: {', '.join(g.callsign for g in gws)}")
+            self.map_w.show_loading(
+                f"GW 커버리지 계산 중: {', '.join(g.callsign for g in gws)}")
             w = HeatmapWorker(self.spatial, gws, merged, env=env, fc=fc)
+            w.sig_log.connect(self.map_w.update_loading_text)   # ← 진행률 연동
             w.sig_done.connect(self._on_heatmap_done)
+            w.sig_err.connect(lambda m: self.map_w.hide_loading())  # ← 에러 시도 해제
             self._start_worker(w)
 
     def _on_heatmap_done(self, hms):
+        self.map_w.hide_loading()
         self._heatmaps = hms
-        sel   = [h['callsign'] for h in hms]
+        # 합성 히트맵('COMBINED')인 경우, 실제 GW callsign 목록을 풀어서 사용
+        # → Node 필터링에서 best_gw와 정확히 매칭되도록
+        sel = []
+        for h in hms:
+            if h.get('type') == 'combined':
+                sel.extend(h.get('gws', []))
+            else:
+                sel.append(h['callsign'])
         gws   = self._gw_win.get_gws()    if self._gw_win   else []
         nodes = self._node_win.get_nodes() if self._node_win else []
-        tile  = self._settings.get('map_tile', 'CartoDB Voyager')  # ← 추가
+        tile = self._settings.get('map_tile', 'CartoDB Voyager')
         self.map_w.refresh(
             gws=gws, nodes=nodes,
             result=self._result,
             heatmaps=hms,
             selected_gws=sel,
-            map_tile=self._settings.get('map_tile', 'CartoDB Voyager'))
+            map_tile=tile)
         self.lbl.setText(f"히트맵: {', '.join(sel)}")
         self.status.showMessage(f"히트맵 완료: {', '.join(sel)}")
 
@@ -1634,10 +1677,6 @@ class MainWindow(QMainWindow):
             return
 
         self.status.showMessage(f"지도 클릭: ({lat:.5f}, {lon:.5f})")
-        if self._gw_win and self._gw_win.isVisible():
-            self._gw_win.set_coord(lon, lat)
-        if self._node_win and self._node_win.isVisible():
-            self._node_win.set_coord(lon, lat)
 
     # ── 공통 ────────────────────────────────────────────────
 

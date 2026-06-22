@@ -44,6 +44,8 @@ DEFAULT_SETTINGS = {
     "large_sample_ratio" : 0.3,      # 샘플링 비율 (0.1~1.0)
     
     "radius_km"     : 25.0,
+    "heatmap_opacity"  : 0.65,   # 격자 히트맵 이미지 투명도
+    "coverage_opacity" : 0.40,   # 수신전력 분포 레이어 투명도
 }
 
 # LoRa SF별 SNR 임계값 (dB)
@@ -271,6 +273,10 @@ class SettingsWindow(QDialog):
         fl4.addRow("",               self.chk_hm_diff)
         fl4.addRow("지도 배경",       self.cb_tile)
         fl4.addRow("히트맵 반경", self.sp_radius)
+        self.sp_hm_opacity  = _dspin(0.1, 1.0, 0.65, 2, "", 0.05)
+        self.sp_cov_opacity = _dspin(0.1, 1.0, 0.40, 2, "", 0.05)
+        fl4.addRow("히트맵 이미지 투명도", self.sp_hm_opacity)
+        fl4.addRow("수신전력 분포 투명도", self.sp_cov_opacity)
 
         note4 = QLabel(
             "· 0.00018° ≈ 20m/격자  (설정값, 실제 계산은 0.0005°)\n"
@@ -381,6 +387,8 @@ class SettingsWindow(QDialog):
         self.sp_tx_interval.setValue(s.get("tx_interval_s", 300.0))
         
         self.sp_radius.setValue(s.get("radius_km", 25.0))
+        self.sp_hm_opacity.setValue(s.get("heatmap_opacity",  0.65))
+        self.sp_cov_opacity.setValue(s.get("coverage_opacity", 0.40))
         
         tile = s.get("map_tile", "CartoDB Voyager")
         idx  = self.cb_tile.findText(tile)
@@ -433,6 +441,8 @@ class SettingsWindow(QDialog):
             "large_sample_ratio" : self.sp_sample_ratio.value(),
             
             "radius_km"     : self.sp_radius.value(),
+            "heatmap_opacity"  : self.sp_hm_opacity.value(),
+            "coverage_opacity" : self.sp_cov_opacity.value(),
         }
 
     def _apply(self):
