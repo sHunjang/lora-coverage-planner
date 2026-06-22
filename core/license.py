@@ -11,26 +11,34 @@ else:
 _LICENSE_PATH = os.path.join(_APP_DIR, "license.dat")
 
 # 배포 코드에는 검증용 비밀키만 포함됩니다.
+# 변경 후
 def _load_secret() -> bytes:
-    """
-    회사별 비밀키 로드 (우선순위):
-      1. 빌드에 포함된 _secret_key.py (배포 시 회사별로 다름)
-      2. 환경변수 LORASCAPE_SECRET (개발/테스트용)
-      3. 기본 폴백 키 (개발 전용 — 배포 시 반드시 교체)
-    """
-    try:
-        # 빌드 시 회사별로 생성해 넣는 모듈
-        from core._secret_key import COMPANY_SECRET
-        return COMPANY_SECRET.encode('utf-8') if isinstance(
-            COMPANY_SECRET, str) else COMPANY_SECRET
-    except Exception:
-        pass
+    # 1순위: exe 옆 license.key 파일 (배포 시 고객사별로 다르게 전달)
+    key_path = os.path.join(_APP_DIR, "license.key")
+    if os.path.exists(key_path):
+        try:
+            with open(key_path, 'rb') as f:
+                raw = f.read().strip()
+            # 간단한 난독화 해제 (base64)
+            import base64
+            return base64.b64decode(raw)
+        except Exception:
+            pass
 
+    # # 2순위: 빌드에 포함된 _secret_key.py (기존 방식 호환)
+    # try:
+    #     from core._secret_key import COMPANY_SECRET
+    #     return COMPANY_SECRET.encode('utf-8') if isinstance(
+    #         COMPANY_SECRET, str) else COMPANY_SECRET
+    # except Exception:
+    #     pass
+
+    # 3순위: 환경변수 (개발/테스트용)
     env_key = os.environ.get('LORASCAPE_SECRET')
     if env_key:
         return env_key.encode('utf-8')
 
-    # 개발 전용 폴백 (배포 빌드에는 _secret_key.py가 있어야 함)
+    # 4순위: 개발 폴백 (배포 빌드에는 절대 도달하면 안 됨)
     return b"DEV-ONLY-FALLBACK-DO-NOT-SHIP"
 
 
